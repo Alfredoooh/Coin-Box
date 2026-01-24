@@ -34,7 +34,6 @@ workflows:
                 echo "==> Running expo prebuild (clean android folder)"
                 cd "$WORKING_DIRECTORY"
                 rm -rf android
-                # Ensure expo-cli available for prebuild (npx will download if needed)
                 npx expo prebuild --platform android --clean
 
       - script:
@@ -54,10 +53,9 @@ workflows:
                 cp "$APP_BUILD" "$APP_BUILD.bak" 2>/dev/null || true
                 cp "$GRADLE_PROPS" "$GRADLE_PROPS.bak" 2>/dev/null || true
 
-                # 1) Enable Hermes (if React Native gradle config style used)
-                # Insert project.ext.react = [ enableHermes: true ] near top if not present
+                # 1) Enable Hermes in gradle.properties or project.ext (best-effort)
                 if ! grep -q "enableHermes" "$APP_BUILD"; then
-                  echo "-> Enabling Hermes in build.gradle (project.ext.react)"
+                  echo "-> Adding project.ext.react = [ enableHermes: true ] to android/build.gradle (best-effort)"
                   awk 'BEGIN{printed=0}
                     /buildscript/ && printed==0 {
                       print;
@@ -68,40 +66,35 @@ workflows:
                     {print}
                   ' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
                 else
-                  echo "-> Hermes already configured in build.gradle"
+                  echo "-> Hermes already configured"
                 fi
 
-                # 2) Ensure release buildType has minifyEnabled true and shrinkResources true
-                if grep -q "buildTypes" "$APP_BUILD"; then
-                  echo "-> Turning on minifyEnabled and shrinkResources in release block"
-                  # Set minifyEnabled true and shrinkResources true if false or missing
-                  sed -E -i.bak -e '/release[[:space:]]*\{/,/\}/{
-                    s/minifyEnabled[[:space:]]*false/minifyEnabled true/g
-                    s/shrinkResources[[:space:]]*false/shrinkResources true/g
-                  }' "$APP_BUILD" || true
+                # 2) Turn on minifyEnabled and shrinkResources in release block (conservative edits)
+                sed -E -i.bak -e '/release[[:space:]]*\\{/,/\\}/{
+                  s/minifyEnabled[[:space:]]*false/minifyEnabled true/g
+                  s/shrinkResources[[:space:]]*false/shrinkResources true/g
+                }' "$APP_BUILD" || true
 
-                  # If keys not present, add them directly after "release {"
-                  if ! sed -n '/release[[:space:]]*{/,/\}/p' "$APP_BUILD" | grep -q "minifyEnabled"; then
-                    awk '{
-                      print
-                      if ($0 ~ /release[[:space:]]*{/) {
-                        print "            minifyEnabled true"
-                        print "            shrinkResources true"
-                      }
-                    }' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
-                  fi
+                # If minify/shrink not present, insert them after the "release {" line
+                if ! sed -n '/release[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "minifyEnabled"; then
+                  awk '{
+                    print
+                    if ($0 ~ /release[[:space:]]*{/) {
+                      print "            minifyEnabled true"
+                      print "            shrinkResources true"
+                    }
+                  }' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
                 fi
 
-                # 3) Ensure proguard files are referenced in release
-                if ! sed -n '/release[[:space:]]*{/,/\}/p' "$APP_BUILD" | grep -q "proguardFiles"; then
-                  echo "-> Adding proguardFiles to release buildType"
-                  sed -E -i.bak '/release[[:space:]]*\{/,/\}/ s/\}/    proguardFiles getDefaultProguardFile('"'"'proguard-android-optimize.txt'"'"'), '"'"'proguard-rules.pro'"'"'\n  \}/' "$APP_BUILD" || true
+                # 3) Ensure proguardFiles reference exists in release
+                if ! sed -n '/release[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "proguardFiles"; then
+                  sed -E -i.bak '/release[[:space:]]*\{/,/\}/ s/\}/    proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\''); proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\'') \n  \}/' "$APP_BUILD" 2>/dev/null || true
+                  # fallback conservative insertion
+                  sed -i.bak '/release[[:space:]]*{/a \ \ \ \ proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\'') , '\''proguard-rules.pro'\'' ' "$APP_BUILD" 2>/dev/null || true
                 fi
 
                 # 4) Force single ABI (armeabi-v7a) to drastically cut native libs size
-                # Place ndk.abiFilters in defaultConfig if not present
-                if ! sed -n '/defaultConfig[[:space:]]*{/,/\}/p' "$APP_BUILD" | grep -q "abiFilters"; then
-                  echo "-> Forcing single ABI (armeabi-v7a) in defaultConfig"
+                if ! sed -n '/defaultConfig[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "abiFilters"; then
                   awk '{
                     print
                     if ($0 ~ /defaultConfig[[:space:]]*{/) {
@@ -112,7 +105,7 @@ workflows:
                   }' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
                 fi
 
-                # 5) gradle.properties tweaks: increase heap, ensure R8 enabled, disable debug symbols packaging
+                # 5) gradle.properties tweaks
                 if ! grep -q "org.gradle.jvmargs" "$GRADLE_PROPS"; then
                   echo "org.gradle.jvmargs=-Xmx4608m" >> "$GRADLE_PROPS"
                 else
@@ -121,20 +114,15 @@ workflows:
                 if ! grep -q "android.enableR8" "$GRADLE_PROPS"; then
                   echo "android.enableR8=true" >> "$GRADLE_PROPS"
                 fi
-                # Disable generation of debug symbols packaging if present (best-effort)
-                if ! grep -q "android.debug.obsoleteApi" "$GRADLE_PROPS"; then
-                  echo "android.debug.obsoleteApi=false" >> "$GRADLE_PROPS"
-                fi
 
-                # 6) Minimal proguard rules to allow shrinking (you can extend if you need to keep things)
+                # 6) Create minimal proguard rules using a HEREDOC — note the single quotes around EOF:
+                #     these lines start with '-' and must be inside the script block scalar to avoid YAML parse errors.
                 cat > "$PROGUARD" <<'EOF'
-# Minimal proguard-rules.pro for React Native + Hermes
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
 -dontwarn com.facebook.react.**
 -dontwarn okhttp3.**
 -dontwarn okio.**
-# Keep RN callbacks
 -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
 EOF
 
@@ -150,30 +138,21 @@ EOF
                 cd "$WORKING_DIRECTORY/android"
                 chmod +x ./gradlew
                 ./gradlew clean
-
-                # Assemble release (will produce APK for the forced ABI only)
                 ./gradlew assembleRelease --no-daemon
 
-                # Collect APKs and pick the smallest one (likely the single-ABI release)
                 echo "==> Locating generated APKs..."
                 APKS=$(find app/build/outputs -type f -name "*.apk" 2>/dev/null || true)
-
                 if [ -z "$APKS" ]; then
                   echo "No APK files found under app/build/outputs — build probably failed."
                   exit 1
                 fi
 
-                # Choose smallest APK (size in bytes)
                 SMALLEST_APK=$(for f in $APKS; do echo "$(stat -c%s "$f"):$f"; done | sort -n | head -n1 | cut -d: -f2-)
                 SMALLEST_SIZE=$(stat -c%s "$SMALLEST_APK" || true)
 
-                echo "Smallest APK: $SMALLEST_APK (size: ${SMALLEST_SIZE} bytes)"
-
-                # Prepare deploy dir and copy chosen APK as app-release.apk
                 mkdir -p "$BITRISE_DEPLOY_DIR"
                 cp "$SMALLEST_APK" "$BITRISE_DEPLOY_DIR/app-release.apk"
 
-                # Print final size in KB/MB
                 echo "Final APK size: $((SMALLEST_SIZE/1024)) KB (~$((SMALLEST_SIZE/1024/1024)) MB)"
 
       - cache-push: {}
