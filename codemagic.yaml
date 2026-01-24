@@ -117,13 +117,10 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           MAIN_APP="android/app/src/main/java/com/nexa/cbox/MainApplication.kt"
-          
           if [ -f "$MAIN_APP" ]; then
             sed -i '' 's/\.uppercase()/\.toUpperCase(Locale.ROOT)/g' "$MAIN_APP"
             echo "MainApplication.kt corrigido"
-          fifacebook.react.**
-          -dontwarn okhttp3.**
-          PROGUARDEOF
+          fi
 
       - name: Build APK otimizado
         script: |
