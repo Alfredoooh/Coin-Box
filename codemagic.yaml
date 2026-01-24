@@ -1,3 +1,4 @@
+# codemaigic.yaml
 format_version: "11"
 
 app:
@@ -26,95 +27,30 @@ workflows:
                 fi
 
       - script:
-          title: Expo prebuild (android) - create native project
+          title: Expo prebuild (android)
           inputs:
             - content: |
                 #!/bin/bash
                 set -euo pipefail
-                echo "==> Running expo prebuild (clean android folder)"
+                echo "==> Expo prebuild (android) - clean"
                 cd "$WORKING_DIRECTORY"
                 rm -rf android
                 npx expo prebuild --platform android --clean
 
       - script:
-          title: Force aggressive Android optimizations (Hermes, R8, shrink, single ABI)
+          title: Create ProGuard and gradle.properties (safe)
           inputs:
             - content: |
                 #!/bin/bash
                 set -euo pipefail
-                echo "==> Applying aggressive optimizations to reduce APK size"
+                echo "==> Writing proguard-rules.pro and gradle.properties tweaks (safe)"
+                APP_DIR="$PWD/$WORKING_DIRECTORY/android/app"
+                GRADLE_PROPS="$PWD/$WORKING_DIRECTORY/android/gradle.properties"
 
-                ROOT="$PWD/$WORKING_DIRECTORY/android"
-                APP_BUILD="$ROOT/app/build.gradle"
-                GRADLE_PROPS="$ROOT/gradle.properties"
-                PROGUARD="$ROOT/app/proguard-rules.pro"
+                mkdir -p "$APP_DIR"
 
-                # Backup original files (safe)
-                cp "$APP_BUILD" "$APP_BUILD.bak" 2>/dev/null || true
-                cp "$GRADLE_PROPS" "$GRADLE_PROPS.bak" 2>/dev/null || true
-
-                # 1) Try enable Hermes via project.ext.react (best-effort)
-                if ! grep -q "enableHermes" "$APP_BUILD"; then
-                  awk 'BEGIN{printed=0}
-                    /buildscript/ && printed==0 {
-                      print;
-                      print "project.ext.react = [ enableHermes: true ]";
-                      printed=1;
-                      next
-                    }
-                    {print}
-                  ' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
-                fi
-
-                # 2) Turn on minifyEnabled and shrinkResources in release block (conservative edits)
-                sed -E -i.bak -e '/release[[:space:]]*{/,/}/{
-                  s/minifyEnabled[[:space:]]*false/minifyEnabled true/g
-                  s/shrinkResources[[:space:]]*false/shrinkResources true/g
-                }' "$APP_BUILD" || true
-
-                # If minify/shrink not present, insert them after the "release {" line
-                if ! sed -n '/release[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "minifyEnabled"; then
-                  awk '{
-                    print
-                    if ($0 ~ /release[[:space:]]*{/) {
-                      print "            minifyEnabled true"
-                      print "            shrinkResources true"
-                    }
-                  }' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
-                fi
-
-                # 3) Ensure proguardFiles reference exists in release
-                if ! sed -n '/release[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "proguardFiles"; then
-                  sed -i.bak '/release[[:space:]]*{/a \
-        proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\'') , '\''proguard-rules.pro'\'' \
-                  ' "$APP_BUILD" || true
-                fi
-
-                # 4) Force single ABI (armeabi-v7a) to drastically cut native libs size
-                if ! sed -n '/defaultConfig[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "abiFilters"; then
-                  awk '{
-                    print
-                    if ($0 ~ /defaultConfig[[:space:]]*{/) {
-                      print "        ndk {"
-                      print "            abiFilters \"armeabi-v7a\""
-                      print "        }"
-                    }
-                  }' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
-                fi
-
-                # 5) gradle.properties tweaks
-                if ! grep -q "org.gradle.jvmargs" "$GRADLE_PROPS"; then
-                  echo "org.gradle.jvmargs=-Xmx4608m" >> "$GRADLE_PROPS"
-                else
-                  sed -i.bak 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4608m/' "$GRADLE_PROPS" || true
-                fi
-                if ! grep -q "android.enableR8" "$GRADLE_PROPS"; then
-                  echo "android.enableR8=true" >> "$GRADLE_PROPS"
-                fi
-
-                # 6) Create minimal proguard rules using a HEREDOC (note single quotes around EOF)
-                # These lines begin with '-' and must remain inside the script literal block.
-                cat > "$PROGUARD" <<'EOF'
+                # Create minimal proguard rules using single-quoted heredoc so YAML won't choke
+                cat > "$APP_DIR/proguard-rules.pro" <<'EOF'
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
 -dontwarn com.facebook.react.**
@@ -123,34 +59,48 @@ workflows:
 -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
 EOF
 
-                echo "Optimizations applied. Review android/app/build.gradle if you need other custom keep rules."
+                # Append gradle.properties entries only if missing
+                if [ -f "$GRADLE_PROPS" ]; then
+                  if ! grep -q "^org.gradle.jvmargs" "$GRADLE_PROPS"; then
+                    echo "org.gradle.jvmargs=-Xmx4608m" >> "$GRADLE_PROPS"
+                  fi
+                  if ! grep -q "^android.enableR8" "$GRADLE_PROPS"; then
+                    echo "android.enableR8=true" >> "$GRADLE_PROPS"
+                  fi
+                else
+                  # create file if missing
+                  echo "org.gradle.jvmargs=-Xmx4608m" > "$GRADLE_PROPS"
+                  echo "android.enableR8=true" >> "$GRADLE_PROPS"
+                fi
+
+                echo "Created proguard-rules.pro and updated gradle.properties (safe)."
 
       - script:
-          title: Build RELEASE APK (single-ABI, optimized)
+          title: Build RELEASE APK (only)
           inputs:
             - content: |
                 #!/bin/bash
                 set -euo pipefail
-                echo "==> Building optimized RELEASE APK (single ABI)"
+                echo "==> Building release APK (assembleRelease)"
                 cd "$WORKING_DIRECTORY/android"
-                chmod +x ./gradlew
+                chmod +x ./gradlew || true
                 ./gradlew clean
                 ./gradlew assembleRelease --no-daemon
 
                 echo "==> Locating generated APKs..."
                 APKS=$(find app/build/outputs -type f -name "*.apk" 2>/dev/null || true)
                 if [ -z "$APKS" ]; then
-                  echo "No APK files found under app/build/outputs — build probably failed."
+                  echo "No APK built — check gradle output above."
                   exit 1
                 fi
 
-                SMALLEST_APK=$(for f in $APKS; do echo "$(stat -c%s "$f"):$f"; done | sort -n | head -n1 | cut -d: -f2-)
-                SMALLEST_SIZE=$(stat -c%s "$SMALLEST_APK" || true)
-
+                # pick smallest APK built
+                SMALLEST_APK=$(for f in $APKS; do printf "%s:%s\n" "$(stat -c%s "$f")" "$f"; done | sort -n | head -n1 | cut -d: -f2-)
                 mkdir -p "$BITRISE_DEPLOY_DIR"
                 cp "$SMALLEST_APK" "$BITRISE_DEPLOY_DIR/app-release.apk"
 
-                echo "Final APK size: $((SMALLEST_SIZE/1024)) KB (~$((SMALLEST_SIZE/1024/1024)) MB)"
+                echo "Final APK copied to $BITRISE_DEPLOY_DIR/app-release.apk"
+                stat -c "APK size: %s bytes (%s KB)" "$BITRISE_DEPLOY_DIR/app-release.apk"
 
       - cache-push: {}
       - deploy-to-bitrise-io: {}
