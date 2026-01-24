@@ -11,16 +11,23 @@ workflows:
           cd coin-box
           npm install
       
-      - name: Set up Android keystore (opcional)
+      - name: Generate Android resources
         script: |
-          # Se tiveres keystore configurado, descomenta estas linhas
-          # echo $ANDROID_KEYSTORE | base64 --decode > /tmp/keystore.jks
-          # export ANDROID_KEYSTORE_PATH=/tmp/keystore.jks
+          cd coin-box
+          # Cria ícones em falta se não existirem
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/mipmap-mdpi
+          mkdir -p android/app/src/main/res/mipmap-xhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxhdpi
+          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+          
+          # Remove referências ao ic_launcher_round do AndroidManifest
+          sed -i.bak '/android:roundIcon/d' android/app/src/main/AndroidManifest.xml
       
       - name: Build Android APK
         script: |
           cd coin-box/android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon
     
     artifacts:
       - coin-box/android/app/build/outputs/**/*.apk
