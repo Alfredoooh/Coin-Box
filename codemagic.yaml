@@ -30,7 +30,7 @@ workflows:
           
           mkdir -p "$APP_DIR"
           
-          # ProGuard rules agressivo
+          # ProGuard rules
           cat > "$APP_DIR/proguard-rules.pro" <<'PROGUARD_EOF'
           -keep class com.facebook.react.** { *; }
           -keep class com.facebook.hermes.** { *; }
@@ -38,37 +38,27 @@ workflows:
           -dontwarn okhttp3.**
           -dontwarn okio.**
           -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
-          -dontoptimize
-          -dontobfuscate
           PROGUARD_EOF
           
           # gradle.properties otimizado
           cat > "$GRADLE_PROPS" <<'GRADLE_EOF'
-          org.gradle.jvmargs=-Xmx4608m -XX:MaxMetaspaceSize=512m
+          org.gradle.jvmargs=-Xmx4608m
           org.gradle.daemon=false
-          org.gradle.configureondemand=true
-          org.gradle.parallel=true
           android.enableR8=true
-          android.enableR8.fullMode=true
-          android.enableDexingArtifactTransform=true
-          android.enableBuildCache=true
           android.useAndroidX=true
           android.enableJetifier=true
           GRADLE_EOF
           
-          # Configurar splits de ABI no build.gradle
+          # Modificar build.gradle para habilitar minify e shrinkResources
           if [ -f "$BUILD_GRADLE" ]; then
-            # Adicionar splits se não existir
+            # Habilitar minifyEnabled e shrinkResources no release
+            sed -i.bak '/release {/,/}/s/minifyEnabled false/minifyEnabled true/' "$BUILD_GRADLE"
+            sed -i.bak '/release {/a\            shrinkResources true' "$BUILD_GRADLE"
+            
+            # Adicionar splits de ABI
             if ! grep -q "splits {" "$BUILD_GRADLE"; then
-              sed -i '/android {/a\
-              \    splits {\
-              \        abi {\
-              \            enable true\
-              \            reset()\
-              \            include "armeabi-v7a", "arm64-v8a"\
-              \            universalApk false\
-              \        }\
-              \    }' "$BUILD_GRADLE"
+              awk '/android {/{print; print "    splits {\n        abi {\n            enable true\n            reset()\n            include \"armeabi-v7a\", \"arm64-v8a\"\n            universalApk false\n        }\n    }"; next}1' "$BUILD_GRADLE" > "$BUILD_GRADLE.tmp"
+              mv "$BUILD_GRADLE.tmp" "$BUILD_GRADLE"
             fi
           fi
 
