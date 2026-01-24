@@ -49,10 +49,28 @@ workflows:
           -assumenosideeffects class android.util.Log {
               public static *** d(...);
               public static *** v(...);
+              public static *** i(...);
+              public static *** w(...);
           }
           -dontwarn com.facebook.react.**
           -dontwarn okhttp3.**
+          -dontwarn okio.**
+          -optimizationpasses 5
+          -dontusemixedcaseclassnames
+          -dontskipnonpubliclibraryclasses
+          -dontpreverify
+          -verbose
           PROGUARDEOF
+      
+      - name: Configurar gradle.properties
+        script: |
+          cd "$WORKING_DIRECTORY"
+          cat >> android/gradle.properties <<'GRADLEEOF'
+          android.enableR8.fullMode=true
+          android.enableSeparatedAnnotationProcessing=true
+          org.gradle.configureondemand=true
+          org.gradle.caching=true
+          GRADLEEOF
 
       - name: Build APK otimizado
         script: |
