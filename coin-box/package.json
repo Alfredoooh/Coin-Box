@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:android:optimized": "expo export --platform android && cd android && ./gradlew assembleRelease",
+    "analyze:bundle": "npx react-native-bundle-visualizer"
   },
   "dependencies": {
     "expo": "~54.0.32",
@@ -16,7 +18,9 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "metro-minify-terser": "^0.80.0",
+    "react-native-bundle-visualizer": "^3.1.1"
   },
   "private": true
 }
