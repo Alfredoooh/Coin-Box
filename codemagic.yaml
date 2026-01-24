@@ -22,56 +22,118 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Fix build.gradle hermesEnabled issue
+      - name: Substituir build.gradle otimizado
         script: |
-          BUILD_GRADLE="$PWD/$WORKING_DIRECTORY/android/app/build.gradle"
-          
-          if [ -f "$BUILD_GRADLE" ]; then
-            # Substituir hermesEnabled por true diretamente
-            sed -i.bak 's/hermesEnabled/true \/\/ hermesEnabled/g' "$BUILD_GRADLE"
-            echo "Fixed hermesEnabled references in build.gradle"
-          fi
+          cd "$WORKING_DIRECTORY"
+          cat > android/app/build.gradle << 'EOFGRADLE'
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
 
-      - name: Configure build for size optimization
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+
+react {
+    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    enableBundleCompression = true
+    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+    bundleCommand = "export:embed"
+    autolinkLibrariesWithApp()
+}
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.nexa.cbox"
+
+    defaultConfig {
+        applicationId "com.nexa.cbox"
+        minSdk 24
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            crunchPngs true
+            zipAlignEnabled true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
+        exclude 'META-INF/**'
+        exclude '**/*.kotlin_module'
+        pickFirst 'lib/*/libc++_shared.so'
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}
+EOFGRADLE
+
+      - name: Criar proguard-rules.pro
         script: |
-          APP_DIR="$PWD/$WORKING_DIRECTORY/android/app"
-          GRADLE_PROPS="$PWD/$WORKING_DIRECTORY/android/gradle.properties"
-          
-          mkdir -p "$APP_DIR"
-          
-          # ProGuard rules
-          cat > "$APP_DIR/proguard-rules.pro" <<'PROGUARD_EOF'
-          -keep class com.facebook.react.** { *; }
-          -keep class com.facebook.hermes.** { *; }
-          -dontwarn com.facebook.react.**
-          -dontwarn okhttp3.**
-          -dontwarn okio.**
-          -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
-          PROGUARD_EOF
-          
-          # gradle.properties (sem android.enableR8 que está deprecated)
-          cat > "$GRADLE_PROPS" <<'GRADLE_EOF'
-          org.gradle.jvmargs=-Xmx4608m
-          org.gradle.daemon=false
-          android.useAndroidX=true
-          android.enableJetifier=true
-          GRADLE_EOF
+          cd "$WORKING_DIRECTORY"
+          cat > android/app/proguard-rules.pro << 'EOF'
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class expo.modules.** { *; }
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}
+-dontwarn com.facebook.react.**
+-dontwarn okhttp3.**
+EOF
 
-      - name: Build RELEASE APK
+      - name: Build APK otimizado
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
-          ./gradlew clean assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verificar tamanho e copiar APK
+        script: |
+          cd "$WORKING_DIRECTORY"
+          echo "==> APKs gerados:"
+          ls -lh android/app/build/outputs/apk/release/*.apk
           
-          APKS=$(find app/build/outputs -type f -name "*.apk")
-          if [ -z "$APKS" ]; then
-            echo "No APK built"
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Erro: Nenhum APK encontrado!"
             exit 1
           fi
           
-          SMALLEST_APK=$(ls -lS app/build/outputs/apk/release/*.apk | tail -1 | awk '{print $NF}')
-          cp "$SMALLEST_APK" "$CM_BUILD_DIR/app-release.apk"
-          echo "APK copied to $CM_BUILD_DIR/app-release.apk"
+          mkdir -p "$CM_BUILD_DIR"
+          cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
+          
+          echo "==> Tamanho do APK:"
+          du -h "$CM_BUILD_DIR/app-release.apk"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
