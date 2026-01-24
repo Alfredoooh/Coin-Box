@@ -11,12 +11,14 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "plugins": ["./expo-optimize-plugin.js"],
     "android": {
       "package": "com.nexa.cbox",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "jsEngine": "hermes"
     },
     "ios": {
       "bundleIdentifier": "com.nexa.cbox"
