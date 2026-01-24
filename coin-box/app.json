@@ -17,7 +17,8 @@
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "versionCode": 1
     },
     "ios": {
       "bundleIdentifier": "com.nexa.cbox"
