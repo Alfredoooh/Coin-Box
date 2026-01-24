@@ -99,17 +99,17 @@ workflows:
       - name: Criar proguard-rules.pro
         script: |
           cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro << 'EOF'
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
--keep class expo.modules.** { *; }
--assumenosideeffects class android.util.Log {
-    public static *** d(...);
-    public static *** v(...);
-}
--dontwarn com.facebook.react.**
--dontwarn okhttp3.**
-EOF
+          cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
+          -keep class com.facebook.react.** { *; }
+          -keep class com.facebook.hermes.** { *; }
+          -keep class expo.modules.** { *; }
+          -assumenosideeffects class android.util.Log {
+              public static *** d(...);
+              public static *** v(...);
+          }
+          -dontwarn com.facebook.react.**
+          -dontwarn okhttp3.**
+          PROGUARDEOF
 
       - name: Build APK otimizado
         script: |
