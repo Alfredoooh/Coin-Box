@@ -118,7 +118,10 @@ workflows:
           cd "$WORKING_DIRECTORY"
           MAIN_APP="android/app/src/main/java/com/nexa/cbox/MainApplication.kt"
           if [ -f "$MAIN_APP" ]; then
-            sed -i '' 's/\.uppercase()/\.toUpperCase(Locale.ROOT)/g' "$MAIN_APP"
+            sed -i '' '1i\
+            import java.util.Locale
+            ' "$MAIN_APP"
+            sed -i '' 's/\.toUpperCase(Locale\.ROOT)/.uppercase(Locale.ROOT)/g' "$MAIN_APP"
             echo "MainApplication.kt corrigido"
           fi
 
