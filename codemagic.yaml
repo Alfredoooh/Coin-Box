@@ -1,5 +1,4 @@
-# codemaigic.yaml
-format_version: "11"
+format_version: "1.0.0"
 
 app:
   envs:
@@ -49,15 +48,15 @@ workflows:
 
                 mkdir -p "$APP_DIR"
 
-                # Create minimal proguard rules using single-quoted heredoc so YAML won't choke
-                cat > "$APP_DIR/proguard-rules.pro" <<'EOF'
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
--dontwarn com.facebook.react.**
--dontwarn okhttp3.**
--dontwarn okio.**
--keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
-EOF
+                # Create minimal proguard rules
+                cat > "$APP_DIR/proguard-rules.pro" <<'PROGUARD_EOF'
+                -keep class com.facebook.react.** { *; }
+                -keep class com.facebook.hermes.** { *; }
+                -dontwarn com.facebook.react.**
+                -dontwarn okhttp3.**
+                -dontwarn okio.**
+                -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
+                PROGUARD_EOF
 
                 # Append gradle.properties entries only if missing
                 if [ -f "$GRADLE_PROPS" ]; then
