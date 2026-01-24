@@ -16,71 +16,100 @@ workflows:
           cd "$WORKING_DIRECTORY"
           npm install --no-audit --no-fund
 
-      - name: Install expo-build-properties
-        script: |
-          cd "$WORKING_DIRECTORY"
-          npx expo install expo-build-properties
-
-      - name: Configurar app.json com otimizações
-        script: |
-          cd "$WORKING_DIRECTORY"
-          cat > app.json <<'APPJSON'
-          {
-            "expo": {
-              "name": "Coin Box",
-              "slug": "coin-box",
-              "version": "1.0.0",
-              "orientation": "portrait",
-              "icon": "./assets/icon.png",
-              "userInterfaceStyle": "light",
-              "splash": {
-                "image": "./assets/splash.png",
-                "resizeMode": "contain",
-                "backgroundColor": "#ffffff"
-              },
-              "android": {
-                "package": "com.nexa.cbox",
-                "adaptiveIcon": {
-                  "foregroundImage": "./assets/icon.png",
-                  "backgroundColor": "#ffffff"
-                },
-                "jsEngine": "hermes",
-                "versionCode": 1
-              },
-              "ios": {
-                "bundleIdentifier": "com.nexa.cbox"
-              },
-              "plugins": [
-                [
-                  "expo-build-properties",
-                  {
-                    "android": {
-                      "enableProguardInReleaseBuilds": true,
-                      "enableShrinkResourcesInReleaseBuilds": true,
-                      "extraProguardRules": "-keep class com.facebook.** { *; }\n-keep class expo.** { *; }\n-dontwarn okhttp3.**"
-                    }
-                  }
-                ]
-              ]
-            }
-          }
-          APPJSON
-
       - name: Expo prebuild (android)
         script: |
           cd "$WORKING_DIRECTORY"
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Forçar arm64-v8a apenas
+      - name: Substituir build.gradle otimizado
         script: |
           cd "$WORKING_DIRECTORY"
-          BUILD_GRADLE="android/app/build.gradle"
-          
-          awk '/defaultConfig \{/{print; print "        ndk { abiFilters \"arm64-v8a\" }"; next}1' "$BUILD_GRADLE" > tmp && mv tmp "$BUILD_GRADLE"
-          
-          echo "==> Verificando ndk:"
-          grep -A 2 "ndk {" "$BUILD_GRADLE" || echo "NDK não encontrado"
+          cat > android/app/build.gradle <<'EOFGRADLE'
+          apply plugin: "com.android.application"
+          apply plugin: "org.jetbrains.kotlin.android"
+          apply plugin: "com.facebook.react"
+
+          def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+
+          react {
+              entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+              reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+              hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+              codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+              enableBundleCompression = true
+              cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+              bundleCommand = "export:embed"
+              autolinkLibrariesWithApp()
+          }
+
+          android {
+              ndkVersion rootProject.ext.ndkVersion
+              buildToolsVersion rootProject.ext.buildToolsVersion
+              compileSdk rootProject.ext.compileSdkVersion
+              namespace "com.nexa.cbox"
+
+              defaultConfig {
+                  applicationId "com.nexa.cbox"
+                  minSdk 24
+                  targetSdk rootProject.ext.targetSdkVersion
+                  versionCode 1
+                  versionName "1.0"
+                  ndk {
+                      abiFilters "arm64-v8a"
+                  }
+              }
+
+              signingConfigs {
+                  debug {
+                      storeFile file('debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled true
+                      shrinkResources true
+                      crunchPngs true
+                      zipAlignEnabled true
+                      proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                  }
+              }
+
+              packagingOptions {
+                  jniLibs {
+                      useLegacyPackaging false
+                  }
+                  exclude 'META-INF/**'
+                  exclude '**/*.kotlin_module'
+                  pickFirst 'lib/*/libc++_shared.so'
+              }
+          }
+
+          dependencies {
+              implementation("com.facebook.react:react-android")
+              implementation("com.facebook.react:hermes-android")
+          }
+          EOFGRADLE
+
+      - name: Criar proguard-rules.pro
+        script: |
+          cd "$WORKING_DIRECTORY"
+          cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
+          -keep class com.facebook.react.** { *; }
+          -keep class com.facebook.hermes.** { *; }
+          -keep class expo.modules.** { *; }
+          -assumenosideeffects class android.util.Log {
+              public static *** d(...);
+              public static *** v(...);
+          }
+          -dontwarn com.facebook.react.**
+          -dontwarn okhttp3.**
+          PROGUARDEOF
 
       - name: Build APK otimizado
         script: |
@@ -104,7 +133,7 @@ workflows:
           mkdir -p "$CM_BUILD_DIR"
           cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
           
-          echo "==> Tamanho do APK:"
+          echo "==> Tamanho final do APK:"
           du -h "$CM_BUILD_DIR/app-release.apk"
 
     artifacts:
