@@ -11,18 +11,13 @@ workflows:
           cd coin-box
           npm install
       
-      - name: Generate Android resources
+      - name: Clean and prebuild Android
         script: |
           cd coin-box
-          # Cria ícones em falta se não existirem
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/mipmap-mdpi
-          mkdir -p android/app/src/main/res/mipmap-xhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxhdpi
-          mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-          
-          # Remove referências ao ic_launcher_round do AndroidManifest
-          sed -i.bak '/android:roundIcon/d' android/app/src/main/AndroidManifest.xml
+          # Remove pasta android existente
+          rm -rf android
+          # Gera projeto Android do zero
+          npx expo prebuild --platform android --clean
       
       - name: Build Android APK
         script: |
