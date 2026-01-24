@@ -1,22 +1,35 @@
-# Add project specific ProGuard rules here.
+# === REGRAS PROGUARD AGRESSIVAS PARA REDUZIR TAMANHO ===
 
-# Otimizações agressivas
+# Otimizações máximas
 -optimizationpasses 5
 -dontusemixedcaseclassnames
--dontskipnonpubliclibraryclasses
 -verbose
+-allowaccessmodification
+-mergeinterfacesaggressively
+-repackageclasses ''
+
+# REMOVE LOGS COMPLETAMENTE EM PRODUÇÃO
+-assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int);
+    public static int v(...);
+    public static int i(...);
+    public static int w(...);
+    public static int d(...);
+    public static int e(...);
+}
+
+# Remove System.out e System.err
+-assumenosideeffects class java.io.PrintStream {
+    public void println(%);
+    public void println(**);
+}
 
 # Keep native methods
 -keepclasseswithmembernames class * {
     native <methods>;
 }
 
-# Keep custom views
--keepclasseswithmembers class * {
-    public <init>(android.content.Context, android.util.AttributeSet);
-}
-
-# React Native
+# React Native - Mínimo necessário
 -keep,allowobfuscation @interface com.facebook.proguard.annotations.DoNotStrip
 -keep,allowobfuscation @interface com.facebook.proguard.annotations.KeepGettersAndSetters
 -keep,allowobfuscation @interface com.facebook.common.internal.DoNotStrip
@@ -56,21 +69,11 @@
 -keep class com.facebook.hermes.unicode.** { *; }
 -keep class com.facebook.jni.** { *; }
 
-# Expo
--keepclassmembers class * {
-  @expo.modules.core.interfaces.ExpoProp *;
-}
+# Expo (mínimo)
 -keep class expo.modules.** { *; }
 
-# Remove logs em produção
--assumenosideeffects class android.util.Log {
-    public static *** d(...);
-    public static *** v(...);
-    public static *** i(...);
-}
+# Remove reflection não usada
+-dontwarn java.lang.invoke.**
 
-# Otimizações adicionais
+# Otimizações agressivas
 -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
--allowaccessmodification
--mergeinterfacesaggressively
--repackageclasses ''
