@@ -1,79 +1,38 @@
 workflows:
-  react-native-android:
-    name: React Native Android
-    max_build_duration: 60
+  android-release:
+    name: Android Release
+    max_build_duration: 120
     environment:
-      node: latest
-      java: 17
-    scripts:
-      - name: Install dependencies
-        script: |
-          cd coin-box
-          npm install
-      
-      - name: Clean and prebuild Android
-        script: |
-          cd coin-box
-          # Remove pasta android existente
-          rm -rf android
-          # Gera projeto Android do zero
-          npx expo prebuild --platform android --clean
-      
-      - name: Build Android APK
-        script: |
-          cd coin-box/android
-          # Build APK otimizado com splits por arquitetura
-          ./gradlew assembleRelease \
-            --no-daemon \
-            -Pandroid.enableMinifyInReleaseBuilds=true \
-            -Pandroid.enableShrinkResourcesInReleaseBuilds=true \
-            -Pandroid.enablePngCrunchInReleaseBuilds=true
-    
-    artifacts:
-      - coin-box/android/app/build/outputs/**/*.apk
-    
-    publishing:
-      email:
-        recipients:
-          - seu-email@example.com  # Substitui pelo teu email
-        notify:
-          success: true
-          failure: true
-
-  react-native-ios:
-    name: React Native iOS
-    max_build_duration: 60
-    environment:
-      node: latest
+      flutter: stable
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Install dependencies
+      - name: Get Flutter packages
         script: |
-          cd coin-box
-          npm install
+          flutter pub get
       
-      - name: Install CocoaPods dependencies
+      - name: Otimizar assets (comprimir imagens)
         script: |
-          cd coin-box/ios
-          pod install
+          # Comprimir PNGs se existirem
+          find . -name "*.png" -exec optipng -o7 {} \; || true
+          # Comprimir JPGs se existirem  
+          find . -name "*.jpg" -o -name "*.jpeg" | xargs jpegoptim --max=85 --strip-all || true
       
-      - name: Build iOS
+      - name: Build APK otimizado (arm64 only + ProGuard + shrink)
         script: |
-          cd coin-box/ios
-          xcodebuild -workspace "$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath build/Runner.xcarchive \
-            archive
+          flutter build apk \
+            --release \
+            --target-platform android-arm64 \
+            --obfuscate \
+            --split-debug-info=build/app/outputs/symbols \
+            --shrink \
+            --tree-shake-icons
+      
+      - name: Verificar tamanho do APK
+        script: |
+          ls -lh build/app/outputs/flutter-apk/
+          echo "Tamanho do APK:"
+          du -h build/app/outputs/flutter-apk/*.apk
     
     artifacts:
-      - coin-box/ios/build/**/*.ipa
-    
-    publishing:
-      email:
-        recipients:
-          - seu-email@example.com  # Substitui pelo teu email
-        notify:
-          success: true
-          failure: true
+      - build/app/outputs/flutter-apk/*.apk
