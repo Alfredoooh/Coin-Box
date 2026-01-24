@@ -101,9 +101,20 @@ workflows:
                   jniLibs {
                       useLegacyPackaging false
                   }
-                  exclude 'META-INF/**'
-                  exclude '**/*.kotlin_module'
+                  resources {
+                      excludes += [
+                          'META-INF/**',
+                          '**/*.kotlin_module',
+                          '**/*.version',
+                          '**/*.properties',
+                          'kotlin/**',
+                          'DebugProbesKt.bin',
+                          'okhttp3/internal/publicsuffix/publicsuffixes.gz'
+                      ]
+                  }
                   pickFirst 'lib/*/libc++_shared.so'
+                  pickFirst 'lib/*/libfbjni.so'
+                  pickFirst 'lib/*/libjsi.so'
               }
           }
 
@@ -197,7 +208,7 @@ workflows:
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --no-build-cache
 
       - name: Verificar tamanho e copiar APK
         script: |
