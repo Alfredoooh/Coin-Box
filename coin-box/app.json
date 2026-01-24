@@ -12,7 +12,11 @@
       "backgroundColor": "#ffffff"
     },
     "android": {
-      "package": "com.nexa.cbox"
+      "package": "com.nexa.cbox",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "ios": {
       "bundleIdentifier": "com.nexa.cbox"
