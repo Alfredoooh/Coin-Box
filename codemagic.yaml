@@ -22,6 +22,16 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
+      - name: Fix build.gradle hermesEnabled issue
+        script: |
+          BUILD_GRADLE="$PWD/$WORKING_DIRECTORY/android/app/build.gradle"
+          
+          if [ -f "$BUILD_GRADLE" ]; then
+            # Substituir hermesEnabled por true diretamente
+            sed -i.bak 's/hermesEnabled/true \/\/ hermesEnabled/g' "$BUILD_GRADLE"
+            echo "Fixed hermesEnabled references in build.gradle"
+          fi
+
       - name: Configure build for size optimization
         script: |
           APP_DIR="$PWD/$WORKING_DIRECTORY/android/app"
