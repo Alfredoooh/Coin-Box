@@ -53,9 +53,8 @@ workflows:
                 cp "$APP_BUILD" "$APP_BUILD.bak" 2>/dev/null || true
                 cp "$GRADLE_PROPS" "$GRADLE_PROPS.bak" 2>/dev/null || true
 
-                # 1) Enable Hermes in gradle.properties or project.ext (best-effort)
+                # 1) Try enable Hermes via project.ext.react (best-effort)
                 if ! grep -q "enableHermes" "$APP_BUILD"; then
-                  echo "-> Adding project.ext.react = [ enableHermes: true ] to android/build.gradle (best-effort)"
                   awk 'BEGIN{printed=0}
                     /buildscript/ && printed==0 {
                       print;
@@ -65,12 +64,10 @@ workflows:
                     }
                     {print}
                   ' "$APP_BUILD" > "$APP_BUILD.tmp" && mv "$APP_BUILD.tmp" "$APP_BUILD" || true
-                else
-                  echo "-> Hermes already configured"
                 fi
 
                 # 2) Turn on minifyEnabled and shrinkResources in release block (conservative edits)
-                sed -E -i.bak -e '/release[[:space:]]*\\{/,/\\}/{
+                sed -E -i.bak -e '/release[[:space:]]*{/,/}/{
                   s/minifyEnabled[[:space:]]*false/minifyEnabled true/g
                   s/shrinkResources[[:space:]]*false/shrinkResources true/g
                 }' "$APP_BUILD" || true
@@ -88,9 +85,9 @@ workflows:
 
                 # 3) Ensure proguardFiles reference exists in release
                 if ! sed -n '/release[[:space:]]*{/,/}/p' "$APP_BUILD" | grep -q "proguardFiles"; then
-                  sed -E -i.bak '/release[[:space:]]*\{/,/\}/ s/\}/    proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\''); proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\'') \n  \}/' "$APP_BUILD" 2>/dev/null || true
-                  # fallback conservative insertion
-                  sed -i.bak '/release[[:space:]]*{/a \ \ \ \ proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\'') , '\''proguard-rules.pro'\'' ' "$APP_BUILD" 2>/dev/null || true
+                  sed -i.bak '/release[[:space:]]*{/a \
+        proguardFiles getDefaultProguardFile('\''proguard-android-optimize.txt'\'') , '\''proguard-rules.pro'\'' \
+                  ' "$APP_BUILD" || true
                 fi
 
                 # 4) Force single ABI (armeabi-v7a) to drastically cut native libs size
@@ -115,8 +112,8 @@ workflows:
                   echo "android.enableR8=true" >> "$GRADLE_PROPS"
                 fi
 
-                # 6) Create minimal proguard rules using a HEREDOC — note the single quotes around EOF:
-                #     these lines start with '-' and must be inside the script block scalar to avoid YAML parse errors.
+                # 6) Create minimal proguard rules using a HEREDOC (note single quotes around EOF)
+                # These lines begin with '-' and must remain inside the script literal block.
                 cat > "$PROGUARD" <<'EOF'
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
