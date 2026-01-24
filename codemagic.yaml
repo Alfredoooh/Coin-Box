@@ -78,7 +78,22 @@ workflows:
                       shrinkResources true
                       crunchPngs true
                       zipAlignEnabled true
+                      debuggable false
+                      jniDebuggable false
+                      renderscriptDebuggable false
                       proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                  }
+              }
+              
+              bundle {
+                  language {
+                      enableSplit = true
+                  }
+                  density {
+                      enableSplit = true
+                  }
+                  abi {
+                      enableSplit = true
                   }
               }
 
@@ -102,15 +117,27 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
+          -keepattributes *Annotation*
           -keep class com.facebook.react.** { *; }
           -keep class com.facebook.hermes.** { *; }
           -keep class expo.modules.** { *; }
+          -keep class com.nexa.cbox.** { *; }
+          
+          -dontwarn com.facebook.**
+          -dontwarn okhttp3.**
+          -dontwarn okio.**
+          -dontwarn javax.annotation.**
+          
           -assumenosideeffects class android.util.Log {
               public static *** d(...);
               public static *** v(...);
+              public static *** i(...);
+              public static *** w(...);
           }
-          -dontwarn com.facebook.react.**
-          -dontwarn okhttp3.**
+          
+          -repackageclasses
+          -allowaccessmodification
+          -optimizationpasses 5
           PROGUARDEOF
 
       - name: Corrigir MainApplication.kt
