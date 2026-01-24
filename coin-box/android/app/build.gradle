@@ -68,10 +68,15 @@ android {
         release {
             signingConfig signingConfigs.debug
             
-            // OTIMIZAÇÕES AGRESSIVAS
+            // OTIMIZAÇÕES ULTRA AGRESSIVAS (equivalente a Flutter --release)
             minifyEnabled true              // ProGuard/R8
             shrinkResources true            // Remove recursos não usados
             crunchPngs true                 // Otimiza PNGs
+            
+            // Separa símbolos de debug (equivalente a --split-debug-info)
+            ndk {
+                debugSymbolLevel 'SYMBOL_TABLE'
+            }
             
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
