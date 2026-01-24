@@ -1,3 +1,5 @@
+         # SUBSTITUIR build.gradle COMPLETO
+          cat > build.gradle << 'EOFGRADLE'
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -9,11 +11,9 @@ react {
     reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
     hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
     codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-
     enableBundleCompression = true
     cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
     bundleCommand = "export:embed"
-
     autolinkLibrariesWithApp()
 }
 
@@ -21,41 +21,16 @@ android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
-
     namespace "com.nexa.cbox"
     
     defaultConfig {
         applicationId "com.nexa.cbox"
-        minSdkVersion 24
-        targetSdkVersion rootProject.ext.targetSdkVersion
+        minSdk 24
+        targetSdk rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
-
-        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"stable\""
-        
-        // SÓ ARM64
         ndk {
             abiFilters "arm64-v8a"
-        }
-        
-        // SÓ resoluções altas
-        resConfigs "xxhdpi", "xxxhdpi"
-        
-        vectorDrawables.useSupportLibrary = true
-    }
-    
-    // SPLITS - APKs menores
-    splits {
-        abi {
-            reset()
-            enable true
-            universalApk false
-            include "arm64-v8a"
-        }
-        density {
-            enable true
-            exclude "ldpi", "mdpi", "hdpi", "xhdpi"
-            compatibleScreens 'normal', 'large', 'xlarge'
         }
     }
     
@@ -71,17 +46,10 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
-            
-            // OTIMIZAÇÕES MÁXIMAS
             minifyEnabled true
             shrinkResources true
             crunchPngs true
             zipAlignEnabled true
-            
-            ndk {
-                debugSymbolLevel 'NONE'
-            }
-            
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
@@ -90,27 +58,9 @@ android {
         jniLibs {
             useLegacyPackaging false
         }
-        
-        // REMOVE TUDO desnecessário
         exclude 'META-INF/**'
         exclude '**/*.kotlin_module'
-        exclude 'kotlin/**'
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE*'
-        exclude 'META-INF/NOTICE*'
-        exclude 'META-INF/androidx.*'
-        
         pickFirst 'lib/*/libc++_shared.so'
-        pickFirst 'lib/*/libfbjni.so'
-    }
-    
-    androidResources {
-        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
-        
-        // SÓ PT e EN
-        resourceConfigurations += ['en', 'pt']
-        
-        additionalParameters '--no-version-vectors'
     }
 }
 
@@ -118,3 +68,33 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 }
+EOFGRADLE
+      
+      - name: Criar proguard-rules.pro
+        script: |
+          cd $WORKING_DIRECTORY
+          cat > android/app/proguard-rules.pro << 'EOF'
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class expo.modules.** { *; }
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}
+-dontwarn com.facebook.react.**
+-dontwarn okhttp3.**
+EOF
+      
+      - name: Build APK otimizado
+        script: |
+          cd $WORKING_DIRECTORY/android
+          ./gradlew assembleRelease --no-daemon
+      
+      - name: Verificar tamanho
+        script: |
+          cd $WORKING_DIRECTORY
+          ls -lh android/app/build/outputs/apk/release/*.apk
+          du -h android/app/build/outputs/apk/release/*.apk
+    
+    artifacts:
+      - coin-box/android/app/build/outputs/**/*.apk
