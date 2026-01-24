@@ -22,7 +22,12 @@ workflows:
       - name: Build Android APK
         script: |
           cd coin-box/android
-          ./gradlew assembleRelease --no-daemon
+          # Build APK otimizado com splits por arquitetura
+          ./gradlew assembleRelease \
+            --no-daemon \
+            -Pandroid.enableMinifyInReleaseBuilds=true \
+            -Pandroid.enableShrinkResourcesInReleaseBuilds=true \
+            -Pandroid.enablePngCrunchInReleaseBuilds=true
     
     artifacts:
       - coin-box/android/app/build/outputs/**/*.apk
