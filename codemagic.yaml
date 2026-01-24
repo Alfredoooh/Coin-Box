@@ -1,38 +1,40 @@
 workflows:
-  android-release:
-    name: Android Release
-    max_build_duration: 120
+  react-native-android:
+    name: React Native Android
+    max_build_duration: 60
     environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
+      node: latest
+      java: 17
     scripts:
-      - name: Get Flutter packages
+      - name: Install dependencies
         script: |
-          flutter pub get
+          npm install
       
-      - name: Otimizar assets (comprimir imagens)
+      - name: Otimizar imagens
         script: |
-          # Comprimir PNGs se existirem
-          find . -name "*.png" -exec optipng -o7 {} \; || true
-          # Comprimir JPGs se existirem  
-          find . -name "*.jpg" -o -name "*.jpeg" | xargs jpegoptim --max=85 --strip-all || true
+          # Comprimir PNGs e JPGs
+          find assets -name "*.png" -exec optipng -o7 {} \; 2>/dev/null || true
+          find assets -name "*.jpg" -o -name "*.jpeg" | xargs jpegoptim --max=75 --strip-all 2>/dev/null || true
       
-      - name: Build APK otimizado (arm64 only + ProGuard + shrink)
+      - name: Clean and prebuild Android
         script: |
-          flutter build apk \
-            --release \
-            --target-platform android-arm64 \
-            --obfuscate \
-            --split-debug-info=build/app/outputs/symbols \
-            --shrink \
-            --tree-shake-icons
+          rm -rf android
+          npx expo prebuild --platform android --clean
       
-      - name: Verificar tamanho do APK
+      - name: Build APK OTIMIZADO
         script: |
-          ls -lh build/app/outputs/flutter-apk/
-          echo "Tamanho do APK:"
-          du -h build/app/outputs/flutter-apk/*.apk
+          cd android
+          ./gradlew assembleRelease \
+            --no-daemon \
+            -Pandroid.enableMinifyInReleaseBuilds=true \
+            -Pandroid.enableShrinkResourcesInReleaseBuilds=true \
+            -Pandroid.enablePngCrunchInReleaseBuilds=true \
+            -Pandroid.enableR8.fullMode=true
+      
+      - name: Verificar tamanho
+        script: |
+          ls -lh android/app/build/outputs/apk/release/*.apk
+          du -h android/app/build/outputs/apk/release/*.apk
     
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
+      - android/app/build/outputs/**/*.apk
