@@ -25,15 +25,9 @@ workflows:
         script: |
           cd coin-box/android
           ./gradlew assembleRelease
-      
-      - name: Build Android Bundle (opcional)
-        script: |
-          cd coin-box/android
-          ./gradlew bundleRelease
     
     artifacts:
       - coin-box/android/app/build/outputs/**/*.apk
-      - coin-box/android/app/build/outputs/**/*.aab
     
     publishing:
       email:
