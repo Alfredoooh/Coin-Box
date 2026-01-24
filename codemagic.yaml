@@ -13,27 +13,43 @@ workflows:
           cd $WORKING_DIRECTORY
           npm install
       
-      - name: Otimizar imagens
-        script: |
-          cd $WORKING_DIRECTORY
-          find assets -name "*.png" -exec optipng -o7 {} \; 2>/dev/null || true
-          find assets -name "*.jpg" -o -name "*.jpeg" | xargs jpegoptim --max=75 --strip-all 2>/dev/null || true
-      
-      - name: Clean and prebuild Android
+      - name: Prebuild Android
         script: |
           cd $WORKING_DIRECTORY
           rm -rf android
           npx expo prebuild --platform android --clean
       
-      - name: Build APK OTIMIZADO
+      - name: Aplicar otimizações no build.gradle
+        script: |
+          cd $WORKING_DIRECTORY/android/app
+          
+          # Backup do build.gradle
+          cp build.gradle build.gradle.bak
+          
+          # Modificar build.gradle
+          sed -i.bak 's/minSdkVersion = 24/minSdkVersion = 24\n        ndk {\n            abiFilters "arm64-v8a"\n        }/' build.gradle
+          
+          sed -i.bak '/release {/,/}/ s/signingConfig/minifyEnabled true\n            shrinkResources true\n            crunchPngs true\n            zipAlignEnabled true\n            ndk {\n                debugSymbolLevel "NONE"\n            }\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\n            signingConfig/' build.gradle
+      
+      - name: Criar proguard-rules.pro
+        script: |
+          cd $WORKING_DIRECTORY
+          cat > android/app/proguard-rules.pro << 'EOF'
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class expo.modules.** { *; }
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}
+-dontwarn com.facebook.react.**
+-dontwarn okhttp3.**
+EOF
+      
+      - name: Build APK otimizado
         script: |
           cd $WORKING_DIRECTORY/android
-          ./gradlew assembleRelease \
-            --no-daemon \
-            -Pandroid.enableMinifyInReleaseBuilds=true \
-            -Pandroid.enableShrinkResourcesInReleaseBuilds=true \
-            -Pandroid.enablePngCrunchInReleaseBuilds=true \
-            -Pandroid.enableR8.fullMode=true
+          ./gradlew assembleRelease --no-daemon
       
       - name: Verificar tamanho
         script: |
