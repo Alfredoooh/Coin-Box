@@ -1,0 +1,87 @@
+workflows:
+  react-native-android:
+    name: React Native Android
+    max_build_duration: 60
+    environment:
+      groups:
+        # Adiciona aqui os teus grupos de variáveis de ambiente
+      vars:
+        # Variáveis públicas (se necessário)
+      node: latest
+      java: 17
+    scripts:
+      - name: Install dependencies
+        script: |
+          cd coin-box
+          npm install
+      
+      - name: Set up Android keystore (opcional)
+        script: |
+          # Se tiveres keystore configurado, descomenta estas linhas
+          # echo $ANDROID_KEYSTORE | base64 --decode > /tmp/keystore.jks
+          # export ANDROID_KEYSTORE_PATH=/tmp/keystore.jks
+      
+      - name: Build Android APK
+        script: |
+          cd coin-box/android
+          ./gradlew assembleRelease
+      
+      - name: Build Android Bundle (opcional)
+        script: |
+          cd coin-box/android
+          ./gradlew bundleRelease
+    
+    artifacts:
+      - coin-box/android/app/build/outputs/**/*.apk
+      - coin-box/android/app/build/outputs/**/*.aab
+    
+    publishing:
+      email:
+        recipients:
+          - seu-email@example.com  # Substitui pelo teu email
+        notify:
+          success: true
+          failure: true
+
+  react-native-ios:
+    name: React Native iOS
+    max_build_duration: 60
+    environment:
+      groups:
+        # Adiciona aqui os teus grupos de variáveis de ambiente
+      vars:
+        XCODE_WORKSPACE: "CoinBox.xcworkspace"  # Ajusta ao nome do teu workspace
+        XCODE_SCHEME: "CoinBox"  # Ajusta ao nome do teu scheme
+      node: latest
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install dependencies
+        script: |
+          cd coin-box
+          npm install
+      
+      - name: Install CocoaPods dependencies
+        script: |
+          cd coin-box/ios
+          pod install
+      
+      - name: Build iOS
+        script: |
+          cd coin-box/ios
+          xcodebuild -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath build/Runner.xcarchive \
+            archive
+    
+    artifacts:
+      - coin-box/ios/build/**/*.ipa
+    
+    publishing:
+      email:
+        recipients:
+          - seu-email@example.com  # Substitui pelo teu email
+        notify:
+          success: true
+          failure: true
