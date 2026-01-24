@@ -3,10 +3,6 @@ workflows:
     name: React Native Android
     max_build_duration: 60
     environment:
-      groups:
-        # Adiciona aqui os teus grupos de variáveis de ambiente
-      vars:
-        # Variáveis públicas (se necessário)
       node: latest
       java: 17
     scripts:
@@ -41,11 +37,6 @@ workflows:
     name: React Native iOS
     max_build_duration: 60
     environment:
-      groups:
-        # Adiciona aqui os teus grupos de variáveis de ambiente
-      vars:
-        XCODE_WORKSPACE: "CoinBox.xcworkspace"  # Ajusta ao nome do teu workspace
-        XCODE_SCHEME: "CoinBox"  # Ajusta ao nome do teu scheme
       node: latest
       xcode: latest
       cocoapods: default
