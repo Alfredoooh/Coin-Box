@@ -16,66 +16,77 @@ workflows:
           cd "$WORKING_DIRECTORY"
           npm install --no-audit --no-fund
 
+      - name: Install expo-build-properties
+        script: |
+          cd "$WORKING_DIRECTORY"
+          npx expo install expo-build-properties
+
+      - name: Configurar app.json com otimizações
+        script: |
+          cd "$WORKING_DIRECTORY"
+          cat > app.json <<'APPJSON'
+          {
+            "expo": {
+              "name": "Coin Box",
+              "slug": "coin-box",
+              "version": "1.0.0",
+              "orientation": "portrait",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#ffffff"
+              },
+              "android": {
+                "package": "com.nexa.cbox",
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/icon.png",
+                  "backgroundColor": "#ffffff"
+                },
+                "jsEngine": "hermes",
+                "versionCode": 1
+              },
+              "ios": {
+                "bundleIdentifier": "com.nexa.cbox"
+              },
+              "plugins": [
+                [
+                  "expo-build-properties",
+                  {
+                    "android": {
+                      "enableProguardInReleaseBuilds": true,
+                      "enableShrinkResourcesInReleaseBuilds": true,
+                      "extraProguardRules": "-keep class com.facebook.** { *; }\n-keep class expo.** { *; }\n-dontwarn okhttp3.**"
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+          APPJSON
+
       - name: Expo prebuild (android)
         script: |
           cd "$WORKING_DIRECTORY"
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Otimizar build.gradle
+      - name: Forçar arm64-v8a apenas
         script: |
           cd "$WORKING_DIRECTORY"
           BUILD_GRADLE="android/app/build.gradle"
           
-          sed -i.bak 's/minifyEnabled false/minifyEnabled true/g' "$BUILD_GRADLE"
+          awk '/defaultConfig \{/{print; print "        ndk { abiFilters \"arm64-v8a\" }"; next}1' "$BUILD_GRADLE" > tmp && mv tmp "$BUILD_GRADLE"
           
-          sed -i.bak '/minifyEnabled true/a\
-                      shrinkResources true' "$BUILD_GRADLE"
-          
-          sed -i.bak '/ndk {/,/}/c\
-                  ndk {\
-                      abiFilters "arm64-v8a"\
-                  }' "$BUILD_GRADLE"
-          
-          echo "Build.gradle otimizado!"
-
-      - name: Criar proguard-rules.pro
-        script: |
-          cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
-          -keep class com.facebook.react.** { *; }
-          -keep class com.facebook.hermes.** { *; }
-          -keep class expo.modules.** { *; }
-          -assumenosideeffects class android.util.Log {
-              public static *** d(...);
-              public static *** v(...);
-              public static *** i(...);
-              public static *** w(...);
-          }
-          -dontwarn com.facebook.react.**
-          -dontwarn okhttp3.**
-          -dontwarn okio.**
-          -optimizationpasses 5
-          -dontusemixedcaseclassnames
-          -dontskipnonpubliclibraryclasses
-          -dontpreverify
-          -verbose
-          PROGUARDEOF
-      
-      - name: Configurar gradle.properties
-        script: |
-          cd "$WORKING_DIRECTORY"
-          cat >> android/gradle.properties <<'GRADLEEOF'
-          android.enableR8.fullMode=true
-          android.enableSeparatedAnnotationProcessing=true
-          org.gradle.configureondemand=true
-          org.gradle.caching=true
-          GRADLEEOF
+          echo "==> Verificando ndk:"
+          grep -A 2 "ndk {" "$BUILD_GRADLE" || echo "NDK não encontrado"
 
       - name: Build APK otimizado
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
+          ./gradlew clean
           ./gradlew assembleRelease --no-daemon
 
       - name: Verificar tamanho e copiar APK
