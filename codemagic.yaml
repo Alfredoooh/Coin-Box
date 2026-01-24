@@ -26,7 +26,6 @@ workflows:
         script: |
           APP_DIR="$PWD/$WORKING_DIRECTORY/android/app"
           GRADLE_PROPS="$PWD/$WORKING_DIRECTORY/android/gradle.properties"
-          BUILD_GRADLE="$APP_DIR/build.gradle"
           
           mkdir -p "$APP_DIR"
           
@@ -40,27 +39,13 @@ workflows:
           -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
           PROGUARD_EOF
           
-          # gradle.properties otimizado
+          # gradle.properties (sem android.enableR8 que está deprecated)
           cat > "$GRADLE_PROPS" <<'GRADLE_EOF'
           org.gradle.jvmargs=-Xmx4608m
           org.gradle.daemon=false
-          android.enableR8=true
           android.useAndroidX=true
           android.enableJetifier=true
           GRADLE_EOF
-          
-          # Modificar build.gradle para habilitar minify e shrinkResources
-          if [ -f "$BUILD_GRADLE" ]; then
-            # Habilitar minifyEnabled e shrinkResources no release
-            sed -i.bak '/release {/,/}/s/minifyEnabled false/minifyEnabled true/' "$BUILD_GRADLE"
-            sed -i.bak '/release {/a\            shrinkResources true' "$BUILD_GRADLE"
-            
-            # Adicionar splits de ABI
-            if ! grep -q "splits {" "$BUILD_GRADLE"; then
-              awk '/android {/{print; print "    splits {\n        abi {\n            enable true\n            reset()\n            include \"armeabi-v7a\", \"arm64-v8a\"\n            universalApk false\n        }\n    }"; next}1' "$BUILD_GRADLE" > "$BUILD_GRADLE.tmp"
-              mv "$BUILD_GRADLE.tmp" "$BUILD_GRADLE"
-            fi
-          fi
 
       - name: Build RELEASE APK
         script: |
