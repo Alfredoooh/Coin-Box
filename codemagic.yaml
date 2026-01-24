@@ -23,39 +23,4 @@ workflows:
         script: |
           cd $WORKING_DIRECTORY/android/app
           
-          # Backup do build.gradle
-          cp build.gradle build.gradle.bak
-          
-          # Modificar build.gradle
-          sed -i.bak 's/minSdkVersion = 24/minSdkVersion = 24\n        ndk {\n            abiFilters "arm64-v8a"\n        }/' build.gradle
-          
-          sed -i.bak '/release {/,/}/ s/signingConfig/minifyEnabled true\n            shrinkResources true\n            crunchPngs true\n            zipAlignEnabled true\n            ndk {\n                debugSymbolLevel "NONE"\n            }\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\n            signingConfig/' build.gradle
-      
-      - name: Criar proguard-rules.pro
-        script: |
-          cd $WORKING_DIRECTORY
-          cat > android/app/proguard-rules.pro << 'EOF'
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
--keep class expo.modules.** { *; }
--assumenosideeffects class android.util.Log {
-    public static *** d(...);
-    public static *** v(...);
-}
--dontwarn com.facebook.react.**
--dontwarn okhttp3.**
-EOF
-      
-      - name: Build APK otimizado
-        script: |
-          cd $WORKING_DIRECTORY/android
-          ./gradlew assembleRelease --no-daemon
-      
-      - name: Verificar tamanho
-        script: |
-          cd $WORKING_DIRECTORY
-          ls -lh android/app/build/outputs/apk/release/*.apk
-          du -h android/app/build/outputs/apk/release/*.apk
-    
-    artifacts:
-      - coin-box/android/app/build/outputs/**/*.apk
+ 
