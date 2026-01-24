@@ -17,38 +17,45 @@ react {
     autolinkLibrariesWithApp()
 }
 
-def enableMinifyInReleaseBuilds = true
-
-def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
-
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.nexa.cbox"
+    
     defaultConfig {
         applicationId "com.nexa.cbox"
-        minSdkVersion rootProject.ext.minSdkVersion
+        minSdkVersion 24
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
 
-        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"stable\""
         
-        // OTIMIZAÇÃO: Gera APKs separados por arquitetura (MUITO IMPORTANTE!)
+        // SÓ ARM64
         ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a"
+            abiFilters "arm64-v8a"
         }
+        
+        // SÓ resoluções altas
+        resConfigs "xxhdpi", "xxxhdpi"
+        
+        vectorDrawables.useSupportLibrary = true
     }
     
-    // OTIMIZAÇÃO: Splits por arquitetura (reduz ~60% do tamanho)
+    // SPLITS - APKs menores
     splits {
         abi {
             reset()
             enable true
-            universalApk false  // Não gera APK universal (gordo)
-            include "armeabi-v7a", "arm64-v8a"  // Apenas arquiteturas ARM
+            universalApk false
+            include "arm64-v8a"
+        }
+        density {
+            enable true
+            exclude "ldpi", "mdpi", "hdpi", "xhdpi"
+            compatibleScreens 'normal', 'large', 'xlarge'
         }
     }
     
@@ -62,20 +69,17 @@ android {
     }
     
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
         release {
             signingConfig signingConfigs.debug
             
-            // OTIMIZAÇÕES ULTRA AGRESSIVAS (equivalente a Flutter --release)
-            minifyEnabled true              // ProGuard/R8
-            shrinkResources true            // Remove recursos não usados
-            crunchPngs true                 // Otimiza PNGs
+            // OTIMIZAÇÕES MÁXIMAS
+            minifyEnabled true
+            shrinkResources true
+            crunchPngs true
+            zipAlignEnabled true
             
-            // Separa símbolos de debug (equivalente a --split-debug-info)
             ndk {
-                debugSymbolLevel 'SYMBOL_TABLE'
+                debugSymbolLevel 'NONE'
             }
             
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
@@ -86,50 +90,31 @@ android {
         jniLibs {
             useLegacyPackaging false
         }
-        // Remove arquivos desnecessários
+        
+        // REMOVE TUDO desnecessário
+        exclude 'META-INF/**'
+        exclude '**/*.kotlin_module'
+        exclude 'kotlin/**'
         exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/license.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
-        exclude 'META-INF/notice.txt'
-        exclude 'META-INF/ASL2.0'
-        exclude 'META-INF/*.kotlin_module'
+        exclude 'META-INF/LICENSE*'
+        exclude 'META-INF/NOTICE*'
+        exclude 'META-INF/androidx.*'
+        
+        pickFirst 'lib/*/libc++_shared.so'
+        pickFirst 'lib/*/libfbjni.so'
     }
     
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
         
-        // Remove idiomas desnecessários (mantém apenas português e inglês)
+        // SÓ PT e EN
         resourceConfigurations += ['en', 'pt']
-    }
-}
-
-["pickFirsts", "excludes", "merges", "doNotStrip"].each { prop ->
-    def options = (findProperty("android.packagingOptions.$prop") ?: "").split(",");
-    for (i in 0..<options.size()) options[i] = options[i].trim();
-    options -= ""
-
-    if (options.length > 0) {
-        println "android.packagingOptions.$prop += $options ($options.length)"
-        options.each {
-            android.packagingOptions[prop] += it
-        }
+        
+        additionalParameters '--no-version-vectors'
     }
 }
 
 dependencies {
     implementation("com.facebook.react:react-android")
-
-    // OTIMIZAÇÃO: Desabilita formatos de imagem pesados
-    def isGifEnabled = false
-    def isWebpEnabled = false
-    def isWebpAnimatedEnabled = false
-
-    if (hermesEnabled.toBoolean()) {
-        implementation("com.facebook.react:hermes-android")
-    } else {
-        implementation jscFlavor
-    }
+    implementation("com.facebook.react:hermes-android")
 }
