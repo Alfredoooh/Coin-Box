@@ -22,13 +22,15 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Create ProGuard and gradle.properties
+      - name: Configure build for size optimization
         script: |
           APP_DIR="$PWD/$WORKING_DIRECTORY/android/app"
           GRADLE_PROPS="$PWD/$WORKING_DIRECTORY/android/gradle.properties"
+          BUILD_GRADLE="$APP_DIR/build.gradle"
           
           mkdir -p "$APP_DIR"
           
+          # ProGuard rules agressivo
           cat > "$APP_DIR/proguard-rules.pro" <<'PROGUARD_EOF'
           -keep class com.facebook.react.** { *; }
           -keep class com.facebook.hermes.** { *; }
@@ -36,14 +38,38 @@ workflows:
           -dontwarn okhttp3.**
           -dontwarn okio.**
           -keepclassmembers class * { @com.facebook.react.uimanager.annotations.ReactProp *; }
+          -dontoptimize
+          -dontobfuscate
           PROGUARD_EOF
           
-          if [ -f "$GRADLE_PROPS" ]; then
-            grep -q "^org.gradle.jvmargs" "$GRADLE_PROPS" || echo "org.gradle.jvmargs=-Xmx4608m" >> "$GRADLE_PROPS"
-            grep -q "^android.enableR8" "$GRADLE_PROPS" || echo "android.enableR8=true" >> "$GRADLE_PROPS"
-          else
-            echo "org.gradle.jvmargs=-Xmx4608m" > "$GRADLE_PROPS"
-            echo "android.enableR8=true" >> "$GRADLE_PROPS"
+          # gradle.properties otimizado
+          cat > "$GRADLE_PROPS" <<'GRADLE_EOF'
+          org.gradle.jvmargs=-Xmx4608m -XX:MaxMetaspaceSize=512m
+          org.gradle.daemon=false
+          org.gradle.configureondemand=true
+          org.gradle.parallel=true
+          android.enableR8=true
+          android.enableR8.fullMode=true
+          android.enableDexingArtifactTransform=true
+          android.enableBuildCache=true
+          android.useAndroidX=true
+          android.enableJetifier=true
+          GRADLE_EOF
+          
+          # Configurar splits de ABI no build.gradle
+          if [ -f "$BUILD_GRADLE" ]; then
+            # Adicionar splits se não existir
+            if ! grep -q "splits {" "$BUILD_GRADLE"; then
+              sed -i '/android {/a\
+              \    splits {\
+              \        abi {\
+              \            enable true\
+              \            reset()\
+              \            include "armeabi-v7a", "arm64-v8a"\
+              \            universalApk false\
+              \        }\
+              \    }' "$BUILD_GRADLE"
+            fi
           fi
 
       - name: Build RELEASE APK
