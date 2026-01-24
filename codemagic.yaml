@@ -5,25 +5,29 @@ workflows:
     environment:
       node: latest
       java: 17
+      vars:
+        WORKING_DIRECTORY: "coin-box"
     scripts:
       - name: Install dependencies
         script: |
+          cd $WORKING_DIRECTORY
           npm install
       
       - name: Otimizar imagens
         script: |
-          # Comprimir PNGs e JPGs
+          cd $WORKING_DIRECTORY
           find assets -name "*.png" -exec optipng -o7 {} \; 2>/dev/null || true
           find assets -name "*.jpg" -o -name "*.jpeg" | xargs jpegoptim --max=75 --strip-all 2>/dev/null || true
       
       - name: Clean and prebuild Android
         script: |
+          cd $WORKING_DIRECTORY
           rm -rf android
           npx expo prebuild --platform android --clean
       
       - name: Build APK OTIMIZADO
         script: |
-          cd android
+          cd $WORKING_DIRECTORY/android
           ./gradlew assembleRelease \
             --no-daemon \
             -Pandroid.enableMinifyInReleaseBuilds=true \
@@ -33,8 +37,9 @@ workflows:
       
       - name: Verificar tamanho
         script: |
+          cd $WORKING_DIRECTORY
           ls -lh android/app/build/outputs/apk/release/*.apk
           du -h android/app/build/outputs/apk/release/*.apk
     
     artifacts:
-      - android/app/build/outputs/**/*.apk
+      - coin-box/android/app/build/outputs/**/*.apk
