@@ -5,10 +5,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { enableScreens } from 'react-native-screens';
 
-import HomeScreen from './screens/HomeScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import { COLORS } from './styles/theme';
-import { screenOptions } from './navigation/navigationConfig';
+import HomeScreen from './src/screens/HomeScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import { COLORS } from './src/styles/theme';
+import { screenOptions } from './src/navigation/navigationConfig';
 
 // Habilita otimizações nativas de tela
 enableScreens();
