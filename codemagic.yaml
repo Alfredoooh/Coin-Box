@@ -22,51 +22,102 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Modificar build.gradle para otimização
+      - name: Substituir build.gradle otimizado
         script: |
-          cd "$WORKING_DIRECTORY/android/app"
-          
-          # Adicionar otimizações ao buildTypes
-          sed -i '' '/buildTypes {/a\
-          \        release {\
-          \            minifyEnabled true\
-          \            shrinkResources true\
-          \            crunchPngs true\
-          \            zipAlignEnabled true\
-          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
-          \        }
-          ' build.gradle || sed -i '/buildTypes {/a\
-          \        release {\
-          \            minifyEnabled true\
-          \            shrinkResources true\
-          \            crunchPngs true\
-          \            zipAlignEnabled true\
-          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
-          \        }
-          ' build.gradle
-          
-          # Adicionar splits
-          sed -i '' '/android {/a\
-          \    splits {\
-          \        abi {\
-          \            enable true\
-          \            reset()\
-          \            include "arm64-v8a"\
-          \            universalApk false\
-          \        }\
-          \    }
-          ' build.gradle || sed -i '/android {/a\
-          \    splits {\
-          \        abi {\
-          \            enable true\
-          \            reset()\
-          \            include "arm64-v8a"\
-          \            universalApk false\
-          \        }\
-          \    }
-          ' build.gradle
+          cd "$WORKING_DIRECTORY"
+          cat > android/app/build.gradle <<'EOFGRADLE'
+          apply plugin: "com.android.application"
+          apply plugin: "org.jetbrains.kotlin.android"
+          apply plugin: "com.facebook.react"
 
-      - name: Criar proguard-rules.pro otimizado
+          def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+
+          react {
+              entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+              reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+              hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+              codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+              enableBundleCompression = true
+              cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+              bundleCommand = "export:embed"
+              autolinkLibrariesWithApp()
+          }
+
+          android {
+              ndkVersion rootProject.ext.ndkVersion
+              buildToolsVersion rootProject.ext.buildToolsVersion
+              compileSdk rootProject.ext.compileSdkVersion
+              namespace "com.nexa.cbox"
+
+              defaultConfig {
+                  applicationId "com.nexa.cbox"
+                  minSdk 24
+                  targetSdk rootProject.ext.targetSdkVersion
+                  versionCode 1
+                  versionName "1.0"
+                  buildConfigField("String", "REACT_NATIVE_RELEASE_LEVEL", "\"STABLE\"")
+                  buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
+              }
+
+              signingConfigs {
+                  debug {
+                      storeFile file('debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                      minifyEnabled true
+                      shrinkResources true
+                      crunchPngs true
+                      zipAlignEnabled true
+                      debuggable false
+                      jniDebuggable false
+                      proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                  }
+              }
+              
+              splits {
+                  abi {
+                      enable true
+                      reset()
+                      include 'arm64-v8a'
+                      universalApk false
+                  }
+              }
+
+              packagingOptions {
+                  jniLibs {
+                      useLegacyPackaging false
+                  }
+                  resources {
+                      excludes += [
+                          'META-INF/**',
+                          '**/*.kotlin_module',
+                          '**/*.version',
+                          '**/*.properties',
+                          'kotlin/**',
+                          'DebugProbesKt.bin',
+                          'okhttp3/internal/publicsuffix/publicsuffixes.gz'
+                      ]
+                  }
+                  pickFirst 'lib/*/libc++_shared.so'
+                  pickFirst 'lib/*/libfbjni.so'
+                  pickFirst 'lib/*/libjsi.so'
+              }
+          }
+
+          dependencies {
+              implementation("com.facebook.react:react-android")
+              implementation("com.facebook.react:hermes-android")
+          }
+          EOFGRADLE
+
+      - name: Criar proguard-rules.pro
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
@@ -93,29 +144,64 @@ workflows:
           -optimizationpasses 5
           PROGUARDEOF
 
-      - name: Criar index.js
+      - name: Corrigir MainApplication.kt
         script: |
           cd "$WORKING_DIRECTORY"
-          if [ ! -f "index.js" ]; then
-            cat > index.js <<'INDEXEOF'
-          import { registerRootComponent } from 'expo';
-          import App from './App';
-          registerRootComponent(App);
-          INDEXEOF
-          fi
+          cat > android/app/src/main/java/com/nexa/cbox/MainApplication.kt <<'EOFKOTLIN'
+          package com.nexa.cbox
+          
+          import android.app.Application
+          import android.content.res.Configuration
+          import expo.modules.ApplicationLifecycleDispatcher
+          import expo.modules.ReactNativeHostWrapper
+          import com.facebook.react.PackageList
+          import com.facebook.react.ReactApplication
+          import com.facebook.react.ReactNativeHost
+          import com.facebook.react.ReactPackage
+          import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
+          import com.facebook.react.defaults.DefaultReactNativeHost
+          import com.facebook.soloader.SoLoader
+          import java.util.Locale
+          
+          class MainApplication : Application(), ReactApplication {
+            override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
+              this,
+              object : DefaultReactNativeHost(this) {
+                override fun getPackages(): List<ReactPackage> {
+                  val packages = PackageList(this).packages
+                  return packages
+                }
+          
+                override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
+          
+                override fun getUseDeveloperSupport(): Boolean = false
+          
+                override val isNewArchEnabled: Boolean = false
+                override val isHermesEnabled: Boolean = true
+              }
+            )
+          
+            override fun onCreate() {
+              super.onCreate()
+              SoLoader.init(this, false)
+              load()
+              ApplicationLifecycleDispatcher.onApplicationCreate(this)
+            }
+          
+            override fun onConfigurationChanged(newConfig: Configuration) {
+              super.onConfigurationChanged(newConfig)
+              ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
+            }
+          }
+          EOFKOTLIN
+          echo "MainApplication.kt substituído"
 
       - name: Build APK otimizado
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --stacktrace 2>&1 | tee /tmp/build.log
-          
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== ERRO COMPLETO ==="
-            tail -200 /tmp/build.log
-            exit 1
-          fi
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --no-build-cache
 
       - name: Verificar tamanho e copiar APK
         script: |
@@ -123,7 +209,11 @@ workflows:
           echo "==> APKs gerados:"
           ls -lh android/app/build/outputs/apk/release/*.apk
           
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*arm64-v8a-release.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          fi
+          
           if [ -z "$APK_PATH" ]; then
             echo "Erro: Nenhum APK encontrado!"
             exit 1
