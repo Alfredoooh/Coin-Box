@@ -22,117 +22,51 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Substituir build.gradle otimizado
+      - name: Modificar build.gradle para otimização
         script: |
-          cd "$WORKING_DIRECTORY"
-          cat > android/app/build.gradle <<'EOFGRADLE'
-          apply plugin: "com.android.application"
-          apply plugin: "org.jetbrains.kotlin.android"
-          apply plugin: "com.facebook.react"
+          cd "$WORKING_DIRECTORY/android/app"
+          
+          # Adicionar otimizações ao buildTypes
+          sed -i '' '/buildTypes {/a\
+          \        release {\
+          \            minifyEnabled true\
+          \            shrinkResources true\
+          \            crunchPngs true\
+          \            zipAlignEnabled true\
+          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
+          \        }
+          ' build.gradle || sed -i '/buildTypes {/a\
+          \        release {\
+          \            minifyEnabled true\
+          \            shrinkResources true\
+          \            crunchPngs true\
+          \            zipAlignEnabled true\
+          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
+          \        }
+          ' build.gradle
+          
+          # Adicionar splits
+          sed -i '' '/android {/a\
+          \    splits {\
+          \        abi {\
+          \            enable true\
+          \            reset()\
+          \            include "arm64-v8a"\
+          \            universalApk false\
+          \        }\
+          \    }
+          ' build.gradle || sed -i '/android {/a\
+          \    splits {\
+          \        abi {\
+          \            enable true\
+          \            reset()\
+          \            include "arm64-v8a"\
+          \            universalApk false\
+          \        }\
+          \    }
+          ' build.gradle
 
-          def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
-
-          react {
-              reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-              hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
-              codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-              cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
-              autolinkLibrariesWithApp()
-          }
-
-          android {
-              ndkVersion rootProject.ext.ndkVersion
-              buildToolsVersion rootProject.ext.buildToolsVersion
-              compileSdk rootProject.ext.compileSdkVersion
-              namespace "com.nexa.cbox"
-
-              defaultConfig {
-                  applicationId "com.nexa.cbox"
-                  minSdk 24
-                  targetSdk rootProject.ext.targetSdkVersion
-                  versionCode 1
-                  versionName "1.0"
-                  buildConfigField("String", "REACT_NATIVE_RELEASE_LEVEL", "\"STABLE\"")
-                  buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
-              }
-
-              signingConfigs {
-                  debug {
-                      storeFile file('debug.keystore')
-                      storePassword 'android'
-                      keyAlias 'androiddebugkey'
-                      keyPassword 'android'
-                  }
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                      minifyEnabled true
-                      shrinkResources true
-                      crunchPngs true
-                      zipAlignEnabled true
-                      debuggable false
-                      jniDebuggable false
-                      renderscriptDebuggable false
-                      proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-                  }
-              }
-              
-              splits {
-                  abi {
-                      enable true
-                      reset()
-                      include 'arm64-v8a'
-                      universalApk false
-                  }
-                  density {
-                      enable true
-                      reset()
-                      include 'xxhdpi'
-                  }
-              }
-              
-              bundle {
-                  language {
-                      enableSplit = true
-                  }
-                  density {
-                      enableSplit = true
-                  }
-                  abi {
-                      enableSplit = true
-                  }
-              }
-
-              packagingOptions {
-                  jniLibs {
-                      useLegacyPackaging false
-                  }
-                  resources {
-                      excludes += [
-                          'META-INF/**',
-                          '**/*.kotlin_module',
-                          '**/*.version',
-                          '**/*.properties',
-                          'kotlin/**',
-                          'DebugProbesKt.bin',
-                          'okhttp3/internal/publicsuffix/publicsuffixes.gz'
-                      ]
-                  }
-                  pickFirst 'lib/*/libc++_shared.so'
-                  pickFirst 'lib/*/libfbjni.so'
-                  pickFirst 'lib/*/libjsi.so'
-              }
-          }
-
-          dependencies {
-              implementation("com.facebook.react:react-android")
-              implementation("com.facebook.react:hermes-android")
-          }
-          EOFGRADLE
-
-      - name: Criar proguard-rules.pro
+      - name: Criar proguard-rules.pro otimizado
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
@@ -159,66 +93,16 @@ workflows:
           -optimizationpasses 5
           PROGUARDEOF
 
-      - name: Corrigir MainApplication.kt
-        script: |
-          cd "$WORKING_DIRECTORY"
-          cat > android/app/src/main/java/com/nexa/cbox/MainApplication.kt <<'EOFKOTLIN'
-          package com.nexa.cbox
-          
-          import android.app.Application
-          import android.content.res.Configuration
-          import expo.modules.ApplicationLifecycleDispatcher
-          import expo.modules.ReactNativeHostWrapper
-          import com.facebook.react.PackageList
-          import com.facebook.react.ReactApplication
-          import com.facebook.react.ReactNativeHost
-          import com.facebook.react.ReactPackage
-          import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
-          import com.facebook.react.defaults.DefaultReactNativeHost
-          import com.facebook.soloader.SoLoader
-          import java.util.Locale
-          
-          class MainApplication : Application(), ReactApplication {
-            override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
-              this,
-              object : DefaultReactNativeHost(this) {
-                override fun getPackages(): List<ReactPackage> {
-                  val packages = PackageList(this).packages
-                  return packages
-                }
-          
-                override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
-          
-                override fun getUseDeveloperSupport(): Boolean = false
-          
-                override val isNewArchEnabled: Boolean = false
-                override val isHermesEnabled: Boolean = true
-              }
-            )
-          
-            override fun onCreate() {
-              super.onCreate()
-              SoLoader.init(this, false)
-              load()
-              ApplicationLifecycleDispatcher.onApplicationCreate(this)
-            }
-          
-            override fun onConfigurationChanged(newConfig: Configuration) {
-              super.onConfigurationChanged(newConfig)
-              ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
-            }
-          }
-          EOFKOTLIN
-          echo "MainApplication.kt substituído"
-
       - name: Criar index.js
         script: |
           cd "$WORKING_DIRECTORY"
-          cat > index.js <<'INDEXEOF'
+          if [ ! -f "index.js" ]; then
+            cat > index.js <<'INDEXEOF'
           import { registerRootComponent } from 'expo';
           import App from './App';
           registerRootComponent(App);
           INDEXEOF
+          fi
 
       - name: Build APK otimizado
         script: |
