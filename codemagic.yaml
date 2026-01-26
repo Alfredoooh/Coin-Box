@@ -81,6 +81,17 @@ workflows:
                   }
               }
               
+              packagingOptions {
+                  exclude 'lib/armeabi-v7a/**'
+                  exclude 'lib/x86/**'
+                  exclude 'lib/x86_64/**'
+              }
+              packagingOptions {
+                  exclude 'lib/armeabi-v7a/**'
+                  exclude 'lib/x86/**'
+                  exclude 'lib/x86_64/**'
+              }
+              
               splits {
                   abi {
                       enable true
