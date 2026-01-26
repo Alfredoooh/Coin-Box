@@ -121,11 +121,10 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
-          -keepattributes *Annotation*
-          -keep class com.facebook.react.** { *; }
-          -keep class com.facebook.hermes.** { *; }
-          -keep class expo.modules.** { *; }
-          -keep class com.nexa.cbox.** { *; }
+          -keepattributes SourceFile,LineNumberTable
+          -keep class com.facebook.react.turbomodule.** { *; }
+          -keep class com.facebook.jni.** { *; }
+          -keep class com.facebook.react.bridge.** { *; }
           
           -dontwarn com.facebook.**
           -dontwarn okhttp3.**
@@ -137,11 +136,14 @@ workflows:
               public static *** v(...);
               public static *** i(...);
               public static *** w(...);
+              public static *** e(...);
           }
           
-          -repackageclasses
+          -repackageclasses ''
           -allowaccessmodification
+          -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
           -optimizationpasses 5
+          -overloadaggressively
           PROGUARDEOF
 
       - name: Corrigir MainApplication.kt
