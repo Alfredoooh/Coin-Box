@@ -33,6 +33,7 @@ workflows:
           def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
           react {
+              entryFile = file("../../index.js")
               reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
               hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
               codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
@@ -218,6 +219,15 @@ workflows:
           echo "Testando criação do bundle JavaScript..."
           npx expo export --platform android --output-dir /tmp/expo-test 2>&1 || echo "Expo export falhou"
           
+      - name: Criar index.js
+        script: |
+          cd "$WORKING_DIRECTORY"
+          cat > index.js <<'INDEXEOF'
+          import { registerRootComponent } from 'expo';
+          import App from './App';
+          registerRootComponent(App);
+          INDEXEOF
+
       - name: Build APK otimizado
         script: |
           cd "$WORKING_DIRECTORY/android"
