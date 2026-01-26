@@ -17,9 +17,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
 
-import { COLORS, getDynamicColors } from '../../styles/theme';
-import { globalStyles, DRAWER_WIDTH } from '../../styles/globalStyles';
-import { getTranslation } from '../../utils/translations';
+import { COLORS, getDynamicColors } from '../styles/theme';
+import { globalStyles, DRAWER_WIDTH } from '../styles/globalStyles';
+import { getTranslation } from '../utils/translations';
 import {
   HomeOutlineIcon,
   HomeFilledIcon,
@@ -32,7 +32,7 @@ import {
   NewChannelIcon,
   LogoutIcon,
   DoubleChevronRightIcon,
-} from '../../components/Icons';
+} from '../components/Icons';
 
 export default function HomeScreen({ navigation, isDarkMode, language }) {
   const [activeTab, setActiveTab] = useState('inicio');
