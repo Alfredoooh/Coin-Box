@@ -213,16 +213,22 @@ workflows:
           EOFKOTLIN
           echo "MainApplication.kt substituído"
 
+      - name: Criar bundle JS manualmente (debug)
+        script: |
+          cd "$WORKING_DIRECTORY"
+          echo "Testando criação do bundle JavaScript..."
+          npx expo export --platform android --output-dir /tmp/expo-test 2>&1 || echo "Expo export falhou"
+          
       - name: Build APK otimizado
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --stacktrace --info 2>&1 | tee build.log
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --stacktrace 2>&1 | tee /tmp/build.log
           
           if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== ERRO NO BUNDLE JS ==="
-            grep -A 50 "createBundleReleaseJsAndAssets" build.log || true
+            echo "=== ERRO COMPLETO ==="
+            tail -200 /tmp/build.log
             exit 1
           fi
 
