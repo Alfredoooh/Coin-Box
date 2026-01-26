@@ -218,7 +218,13 @@ workflows:
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m"
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --stacktrace --info 2>&1 | tee build.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "=== ERRO NO BUNDLE JS ==="
+            grep -A 50 "createBundleReleaseJsAndAssets" build.log || true
+            exit 1
+          fi
 
       - name: Verificar tamanho e copiar APK
         script: |
