@@ -15,8 +15,8 @@ import {
 } from 'react-native';  
 import { MaterialCommunityIcons } from '@expo/vector-icons';  
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, getDynamicColors } from '../../styles/theme';  
-import { getTranslation } from '../../utils/translations';  
+import { COLORS, getDynamicColors } from '../styles/theme';  
+import { getTranslation } from '../utils/translations';  
 import { 
   AutoThemeIcon, 
   LightThemeIcon, 
