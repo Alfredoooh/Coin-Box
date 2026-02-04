@@ -1,6 +1,6 @@
 workflows:
-  react-native-android-minimal-apk:
-    name: React Native Android APK Build (CORRIGIDO)
+  react-native-android-final:
+    name: React Native Android - FINAL (com CLI fix)
     max_build_duration: 60
     environment:
       vars:
@@ -15,25 +15,16 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           npm install --no-audit --no-fund
+          
+          # CORRIGIR: Adicionar CLI do React Native
+          echo "🔧 Adicionando @react-native-community/cli..."
+          npm install --save-dev @react-native-community/cli@latest --no-audit
 
       - name: Expo prebuild (android)
         script: |
           cd "$WORKING_DIRECTORY"
           rm -rf android
           npx expo prebuild --platform android --clean
-
-      # NOVO: Verificar se o bundle funciona ANTES de buildar
-      - name: Testar bundle JavaScript
-        script: |
-          cd "$WORKING_DIRECTORY"
-          echo "🧪 Testando criação do bundle..."
-          npx expo export:embed --platform android --entry-file node_modules/expo-router/entry --dev false || {
-            echo "❌ ERRO: Falha ao criar bundle JavaScript!"
-            echo "Tentando com React Native CLI padrão..."
-            npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output /tmp/test.bundle --verbose
-            exit 1
-          }
-          echo "✅ Bundle criado com sucesso!"
 
       - name: Substituir build.gradle otimizado
         script: |
@@ -46,13 +37,12 @@ workflows:
           def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
           react {
-              // CORRIGIDO: Detectar o entry file corretamente
+              // Detectar entry file com fallback
               def entryFileScript = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir)
               entryFileScript.waitFor()
               if (entryFileScript.exitValue() == 0) {
                   entryFile = file(entryFileScript.text.trim())
               } else {
-                  // Fallback para index.js se expo falhar
                   entryFile = file("$projectRoot/index.js")
               }
               
@@ -60,12 +50,8 @@ workflows:
               hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
               codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
               
-              // IMPORTANTE: Habilitar logging para debug
               enableBundleCompression = true
               bundleCommand = "export:embed"
-              
-              // Adicionar argumentos extras para ver erros
-              extraPackagerArgs = ["--verbose"]
               
               cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
               autolinkLibrariesWithApp()
@@ -83,7 +69,6 @@ workflows:
                   targetSdk rootProject.ext.targetSdkVersion
                   versionCode 1
                   versionName "1.0"
-                  buildConfigField("String", "REACT_NATIVE_RELEASE_LEVEL", "\"STABLE\"")
                   buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
               }
 
@@ -229,7 +214,7 @@ workflows:
             }
           }
           EOFKOTLIN
-          echo "MainApplication.kt substituído"
+          echo "✅ MainApplication.kt substituído"
 
       - name: Build APK otimizado
         script: |
@@ -237,27 +222,18 @@ workflows:
           chmod +x ./gradlew
           ./gradlew clean
           
-          # Build com mais informações de debug
-          echo "🏗️ Iniciando build com stack trace..."
+          echo "🏗️ Iniciando build..."
           ./gradlew assembleRelease \
             --no-daemon \
             --stacktrace \
             -Dorg.gradle.jvmargs="-Xmx4096m" \
-            --no-build-cache \
-            --info | tee build-output.log
-          
-          # Se falhar, mostrar as últimas 100 linhas do log
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Build falhou! Últimas 100 linhas do log:"
-            tail -n 100 build-output.log
-            exit 1
-          fi
+            --no-build-cache
 
       - name: Verificar tamanho e copiar APK
         script: |
           cd "$WORKING_DIRECTORY"
           echo "==> APKs gerados:"
-          ls -lh android/app/build/outputs/apk/release/*.apk || echo "Nenhum APK encontrado"
+          ls -lh android/app/build/outputs/apk/release/*.apk
           
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*arm64-v8a-release.apk" -type f | head -1)
           if [ -z "$APK_PATH" ]; then
@@ -266,20 +242,17 @@ workflows:
           
           if [ -z "$APK_PATH" ]; then
             echo "❌ Erro: Nenhum APK encontrado!"
-            echo "Listando todos os arquivos em build/outputs:"
-            find android/app/build/outputs -type f
             exit 1
           fi
           
           mkdir -p "$CM_BUILD_DIR"
           cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
           
-          echo "==> Tamanho final do APK:"
+          echo "==> ✅ Tamanho final do APK:"
           du -h "$CM_BUILD_DIR/app-release.apk"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
-      - $WORKING_DIRECTORY/android/build-output.log
     publishing:
       email:
         recipients:
