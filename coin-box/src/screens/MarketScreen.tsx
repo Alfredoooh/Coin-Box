@@ -396,7 +396,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           <View style={[styles.logoContainer, { backgroundColor: colors.surface }]}>
             {item.logo === 'candlestick' ? (
               <Image
-                source={require('../assets/candlestick.png')}
+                source={require('../../assets/candlestick.png')}
                 style={styles.candlestickIcon}
                 resizeMode="contain"
               />
