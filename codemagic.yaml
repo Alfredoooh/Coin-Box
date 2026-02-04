@@ -1,6 +1,6 @@
 workflows:
-  react-native-android-debug:
-    name: React Native Android - COM LOGS COMPLETOS
+  react-native-android-fixed:
+    name: React Native Android - CORRIGIDO FINAL
     max_build_duration: 60
     environment:
       vars:
@@ -215,63 +215,30 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           echo "🧪 === TESTANDO BUNDLE JAVASCRIPT ==="
-          set -x
-          npx expo export:embed --platform android --dev false 2>&1 | tee bundle-test.log
-          BUNDLE_EXIT_CODE=${PIPESTATUS[0]}
-          set +x
           
-          if [ $BUNDLE_EXIT_CODE -ne 0 ]; then
-            echo "❌ BUNDLE FALHOU! Código de saída: $BUNDLE_EXIT_CODE"
-            echo "📋 Últimas 50 linhas do log:"
-            tail -50 bundle-test.log
+          mkdir -p /tmp/test-bundle
+          
+          npx expo export:embed \
+            --platform android \
+            --bundle-output /tmp/test-bundle/index.android.bundle \
+            --assets-dest /tmp/test-bundle \
+            --dev false
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Bundle criado com sucesso!"
+            echo "📦 Tamanho do bundle:"
+            du -h /tmp/test-bundle/index.android.bundle
+          else
+            echo "❌ ERRO ao criar bundle!"
             exit 1
           fi
-          
-          echo "✅ Bundle criado com sucesso!"
 
-      - name: Build APK com MÁXIMO de logs
+      - name: Build APK otimizado
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
-          
-          echo "🧹 Limpando builds anteriores..."
           ./gradlew clean
-          
-          echo "🏗️ === INICIANDO BUILD COM LOGS COMPLETOS ==="
-          set -x
-          ./gradlew assembleRelease \
-            --no-daemon \
-            --stacktrace \
-            --info \
-            --warning-mode all \
-            -Dorg.gradle.jvmargs="-Xmx4096m" \
-            --no-build-cache 2>&1 | tee ../build-full.log
-          
-          BUILD_EXIT_CODE=${PIPESTATUS[0]}
-          set +x
-          
-          echo ""
-          echo "📊 === RESULTADO DO BUILD ==="
-          echo "Código de saída: $BUILD_EXIT_CODE"
-          
-          if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            echo ""
-            echo "❌ === BUILD FALHOU! ==="
-            echo ""
-            echo "📋 PROCURANDO POR ERROS NO LOG..."
-            echo ""
-            grep -i "error" ../build-full.log | tail -20 || echo "Nenhum 'error' encontrado"
-            echo ""
-            grep -i "exception" ../build-full.log | tail -20 || echo "Nenhuma 'exception' encontrada"
-            echo ""
-            grep -i "failed" ../build-full.log | tail -20 || echo "Nenhum 'failed' encontrado"
-            echo ""
-            echo "📋 ÚLTIMAS 100 LINHAS DO LOG:"
-            tail -100 ../build-full.log
-            exit 1
-          fi
-          
-          echo "✅ Build completado com sucesso!"
+          ./gradlew assembleRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx4096m" --no-build-cache
 
       - name: Verificar tamanho e copiar APK
         script: |
@@ -297,8 +264,6 @@ workflows:
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
-      - $WORKING_DIRECTORY/build-full.log
-      - $WORKING_DIRECTORY/bundle-test.log
     publishing:
       email:
         recipients:
