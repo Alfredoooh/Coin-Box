@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import MarketScreen from './séc/screens/MarketScreen';
+import MarketScreen from './src/screens/MarketScreen';
 import MarketDetailScreen from './src/screens/MarketDetailScreen';
 import MarketInfoScreen from './src/screens/MarketInfoScreen';
 import { COLORS } from './src/styles/theme';
