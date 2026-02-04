@@ -807,7 +807,7 @@ export default function HomeScreen({ navigation, isDarkMode, language }) {
         {/* Ícono */}
         <View style={[styles.marketCardIcon, { backgroundColor: isDarkMode ? '#353739' : '#DDDFE3' }]}>
           {market.logo === 'candlestick' ? (
-            <Image source={require('../assets/candlestick.png')} style={styles.marketCardImage} resizeMode="contain" />
+            <Image source={require('../../assets/candlestick.png')} style={styles.marketCardImage} resizeMode="contain" />
           ) : (
             <Image source={{ uri: market.logo }} style={styles.marketCardImage} resizeMode="contain" />
           )}
