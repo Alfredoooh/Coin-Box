@@ -1,16 +1,20 @@
 // App.tsx
-import React, { useState } from 'react';
-import { StatusBar as RNStatusBar, StyleSheet, SafeAreaView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StatusBar as RNStatusBar, StyleSheet, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { enableScreens } from 'react-native-screens';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import HomeScreen from './src/screens/HomeScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import { COLORS } from './src/styles/theme';
-import { screenOptions } from './src/navigation/navigationConfig';
+import HomeScreen from './screens/HomeScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import MarketScreen from './screens/MarketScreen';
+import MarketDetailScreen from './screens/MarketDetailScreen';
+import MarketInfoScreen from './screens/MarketInfoScreen';
+import { COLORS } from './styles/theme';
+import { screenOptions } from './navigation/navigationConfig';
+import { BalanceProvider } from './contexts/BalanceContext';
 
-// Habilita otimizações nativas de tela
 enableScreens();
 
 const Stack = createNativeStackNavigator();
@@ -21,44 +25,79 @@ export default function App() {
 
   const colors = isDarkMode ? COLORS.dark : COLORS.light;
 
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const setNavigationBarColor = async () => {
+        try {
+          const { setBackgroundColorAsync, setButtonStyleAsync } = require('expo-navigation-bar');
+          await setBackgroundColorAsync(isDarkMode ? '#0E0F10' : '#FFFFFF');
+          await setButtonStyleAsync(isDarkMode ? 'light' : 'dark');
+        } catch (e) {
+          console.log('Navigation bar API not available');
+        }
+      };
+      setNavigationBarColor();
+    }
+  }, [isDarkMode]);
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <RNStatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.statusbar}
-        animated={true}
-      />
-      
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={screenOptions}>
-          <Stack.Screen 
-            name="Home"
-            options={{
-              animationTypeForReplace: 'pop',
-            }}
-          >
-            {(props) => (
-              <HomeScreen
-                {...props}
-                isDarkMode={isDarkMode}
-                language={language}
+    <SafeAreaProvider>
+      <BalanceProvider>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <RNStatusBar
+            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+            backgroundColor="transparent"
+            translucent={true}
+            animated={true}
+          />
+
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={screenOptions}>
+              <Stack.Screen name="Home">
+                {(props) => (
+                  <HomeScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    language={language}
+                  />
+                )}
+              </Stack.Screen>
+              
+              <Stack.Screen name="Settings">
+                {(props) => (
+                  <SettingsScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                    setIsDarkMode={setIsDarkMode}
+                    language={language}
+                    setLanguage={setLanguage}
+                  />
+                )}
+              </Stack.Screen>
+
+              <Stack.Screen name="Market">
+                {(props) => (
+                  <MarketScreen
+                    {...props}
+                    isDarkMode={isDarkMode}
+                  />
+                )}
+              </Stack.Screen>
+
+              <Stack.Screen 
+                name="MarketDetail"
+                component={MarketDetailScreen}
               />
-            )}
-          </Stack.Screen>
-          <Stack.Screen name="Settings">
-            {(props) => (
-              <SettingsScreen
-                {...props}
-                isDarkMode={isDarkMode}
-                setIsDarkMode={setIsDarkMode}
-                language={language}
-                setLanguage={setLanguage}
+
+              <Stack.Screen 
+                name="MarketInfo"
+                component={MarketInfoScreen}
               />
-            )}
-          </Stack.Screen>
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaView>
+            </Stack.Navigator>
+          </NavigationContainer>
+        </View>
+      </BalanceProvider>
+    </SafeAreaProvider>
   );
 }
 
