@@ -1,6 +1,6 @@
 workflows:
   react-native-android-minimal-apk:
-    name: React Native Android APK Build
+    name: React Native Android APK Build (CORRIGIDO)
     max_build_duration: 60
     environment:
       vars:
@@ -22,6 +22,19 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
+      # NOVO: Verificar se o bundle funciona ANTES de buildar
+      - name: Testar bundle JavaScript
+        script: |
+          cd "$WORKING_DIRECTORY"
+          echo "🧪 Testando criação do bundle..."
+          npx expo export:embed --platform android --entry-file node_modules/expo-router/entry --dev false || {
+            echo "❌ ERRO: Falha ao criar bundle JavaScript!"
+            echo "Tentando com React Native CLI padrão..."
+            npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output /tmp/test.bundle --verbose
+            exit 1
+          }
+          echo "✅ Bundle criado com sucesso!"
+
       - name: Substituir build.gradle otimizado
         script: |
           cd "$WORKING_DIRECTORY"
@@ -33,13 +46,28 @@ workflows:
           def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
           react {
-              entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+              // CORRIGIDO: Detectar o entry file corretamente
+              def entryFileScript = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir)
+              entryFileScript.waitFor()
+              if (entryFileScript.exitValue() == 0) {
+                  entryFile = file(entryFileScript.text.trim())
+              } else {
+                  // Fallback para index.js se expo falhar
+                  entryFile = file("$projectRoot/index.js")
+              }
+              
               reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
               hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
               codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+              
+              // IMPORTANTE: Habilitar logging para debug
               enableBundleCompression = true
-              cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
               bundleCommand = "export:embed"
+              
+              // Adicionar argumentos extras para ver erros
+              extraPackagerArgs = ["--verbose"]
+              
+              cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
               autolinkLibrariesWithApp()
           }
 
@@ -81,11 +109,6 @@ workflows:
                   }
               }
               
-              packagingOptions {
-                  exclude 'lib/armeabi-v7a/**'
-                  exclude 'lib/x86/**'
-                  exclude 'lib/x86_64/**'
-              }
               packagingOptions {
                   exclude 'lib/armeabi-v7a/**'
                   exclude 'lib/x86/**'
@@ -174,7 +197,6 @@ workflows:
           import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
           import com.facebook.react.defaults.DefaultReactNativeHost
           import com.facebook.soloader.SoLoader
-          import java.util.Locale
           
           class MainApplication : Application(), ReactApplication {
             override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
@@ -202,7 +224,7 @@ workflows:
             }
           
             override fun onConfigurationChanged(newConfig: Configuration) {
-              super.onConfigurationChanged(newConfig)
+              super.onConfigurationChanged(this, newConfig)
               ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
             }
           }
@@ -214,13 +236,28 @@ workflows:
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --no-build-cache
+          
+          # Build com mais informações de debug
+          echo "🏗️ Iniciando build com stack trace..."
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            -Dorg.gradle.jvmargs="-Xmx4096m" \
+            --no-build-cache \
+            --info | tee build-output.log
+          
+          # Se falhar, mostrar as últimas 100 linhas do log
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ Build falhou! Últimas 100 linhas do log:"
+            tail -n 100 build-output.log
+            exit 1
+          fi
 
       - name: Verificar tamanho e copiar APK
         script: |
           cd "$WORKING_DIRECTORY"
           echo "==> APKs gerados:"
-          ls -lh android/app/build/outputs/apk/release/*.apk
+          ls -lh android/app/build/outputs/apk/release/*.apk || echo "Nenhum APK encontrado"
           
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*arm64-v8a-release.apk" -type f | head -1)
           if [ -z "$APK_PATH" ]; then
@@ -228,7 +265,9 @@ workflows:
           fi
           
           if [ -z "$APK_PATH" ]; then
-            echo "Erro: Nenhum APK encontrado!"
+            echo "❌ Erro: Nenhum APK encontrado!"
+            echo "Listando todos os arquivos em build/outputs:"
+            find android/app/build/outputs -type f
             exit 1
           fi
           
@@ -240,6 +279,7 @@ workflows:
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
+      - $WORKING_DIRECTORY/android/build-output.log
     publishing:
       email:
         recipients:
