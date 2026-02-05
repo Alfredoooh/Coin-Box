@@ -1,6 +1,6 @@
 workflows:
   react-native-android-fixed:
-    name: React Native Android - CORRIGIDO FINAL
+    name: React Native Android - OTIMIZADO E SEGURO
     max_build_duration: 60
     environment:
       vars:
@@ -90,12 +90,6 @@ workflows:
                   }
               }
               
-              packagingOptions {
-                  exclude 'lib/armeabi-v7a/**'
-                  exclude 'lib/x86/**'
-                  exclude 'lib/x86_64/**'
-              }
-              
               splits {
                   abi {
                       enable true
@@ -132,33 +126,132 @@ workflows:
           }
           EOFGRADLE
 
-      - name: Criar proguard-rules.pro
+      - name: Criar proguard-rules.pro SEGURO
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
-          -keepattributes SourceFile,LineNumberTable
-          -keep class com.facebook.react.turbomodule.** { *; }
-          -keep class com.facebook.jni.** { *; }
-          -keep class com.facebook.react.bridge.** { *; }
+          # ========================================
+          # REGRAS PROGUARD SEGURAS PARA REACT NATIVE + EXPO
+          # ========================================
           
-          -dontwarn com.facebook.**
+          # Manter atributos essenciais
+          -keepattributes *Annotation*
+          -keepattributes Signature
+          -keepattributes Exceptions
+          -keepattributes InnerClasses
+          -keepattributes EnclosingMethod
+          -keepattributes SourceFile,LineNumberTable
+          
+          # ========================================
+          # REACT NATIVE - CRÍTICO
+          # ========================================
+          -keep class com.facebook.react.** { *; }
+          -keep class com.facebook.hermes.** { *; }
+          -keep class com.facebook.jni.** { *; }
+          -keep class com.facebook.soloader.** { *; }
+          
+          # TurboModules e Fabric
+          -keep class com.facebook.react.turbomodule.** { *; }
+          -keep class com.facebook.react.fabric.** { *; }
+          -keep class com.facebook.react.uimanager.** { *; }
+          -keep class com.facebook.react.bridge.** { *; }
+          -keep class com.facebook.react.modules.** { *; }
+          
+          # ViewManagers customizados
+          -keep class * extends com.facebook.react.uimanager.ViewManager { *; }
+          -keep class * extends com.facebook.react.bridge.ReactContextBaseJavaModule { *; }
+          -keep class * implements com.facebook.react.bridge.NativeModule { *; }
+          
+          # ========================================
+          # EXPO - CRÍTICO
+          # ========================================
+          -keep class expo.modules.** { *; }
+          -keep class com.swmansion.** { *; }
+          -keep interface expo.modules.** { *; }
+          
+          # Expo modules específicos
+          -keep class expo.modules.core.interfaces.Package { *; }
+          -keep class * implements expo.modules.core.interfaces.Package { *; }
+          
+          # ========================================
+          # JSI (JavaScript Interface)
+          # ========================================
+          -keep class com.facebook.jsi.** { *; }
+          
+          # ========================================
+          # JAVASCRIPT TO NATIVE BRIDGE
+          # ========================================
+          -keepclassmembers class * {
+              @com.facebook.react.uimanager.annotations.ReactProp <methods>;
+              @com.facebook.react.uimanager.annotations.ReactPropGroup <methods>;
+          }
+          
+          -keepclassmembers class * {
+              @com.facebook.react.bridge.ReactMethod <methods>;
+          }
+          
+          # ========================================
+          # REFLECTION - Usado por React Native
+          # ========================================
+          -keepclassmembers class * {
+              public <init>(...);
+          }
+          
+          # ========================================
+          # WARNINGS - Suprimir avisos conhecidos
+          # ========================================
+          -dontwarn com.facebook.react.**
+          -dontwarn com.facebook.hermes.**
           -dontwarn okhttp3.**
           -dontwarn okio.**
           -dontwarn javax.annotation.**
+          -dontwarn com.google.android.gms.**
+          -dontwarn org.conscrypt.**
           
+          # ========================================
+          # OTIMIZAÇÕES SEGURAS
+          # ========================================
+          # Remove logs apenas em produção (seguro)
           -assumenosideeffects class android.util.Log {
               public static *** d(...);
               public static *** v(...);
-              public static *** i(...);
-              public static *** w(...);
-              public static *** e(...);
           }
           
-          -repackageclasses ''
-          -allowaccessmodification
-          -optimizations !code/simplification/arithmetic,!code/simplification/cast,!field/*,!class/merging/*
-          -optimizationpasses 5
-          -overloadaggressively
+          # Mantém nomes de classes de erro para debug
+          -keepnames class * extends java.lang.Exception
+          
+          # ========================================
+          # OUTRAS BIBLIOTECAS COMUNS
+          # ========================================
+          # OkHttp
+          -keep class okhttp3.** { *; }
+          -keep interface okhttp3.** { *; }
+          
+          # Gson (se usar)
+          -keep class com.google.gson.** { *; }
+          -keep class * implements com.google.gson.TypeAdapter
+          
+          # Kotlin
+          -keep class kotlin.** { *; }
+          -keep class kotlinx.** { *; }
+          
+          # ========================================
+          # NATIVE LIBRARIES
+          # ========================================
+          -keep class * {
+              native <methods>;
+          }
+          
+          # ========================================
+          # SERIALIZAÇÃO (se usar com AsyncStorage, etc)
+          # ========================================
+          -keepclassmembers class * implements java.io.Serializable {
+              private static final java.io.ObjectStreamField[] serialPersistentFields;
+              private void writeObject(java.io.ObjectOutputStream);
+              private void readObject(java.io.ObjectInputStream);
+              java.lang.Object writeReplace();
+              java.lang.Object readResolve();
+          }
           PROGUARDEOF
 
       - name: Corrigir MainApplication.kt
