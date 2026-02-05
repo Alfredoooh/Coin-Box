@@ -1,6 +1,6 @@
 workflows:
   react-native-android-fixed:
-    name: React Native Android - CORRIGIDO DEFINITIVO
+    name: React Native Android - NEW ARCH DISABLED
     max_build_duration: 60
     environment:
       vars:
@@ -17,11 +17,89 @@ workflows:
           npm install --no-audit --no-fund
           npm install --save-dev @react-native-community/cli@latest --no-audit
 
+      - name: CORRIGIR app.json - DESABILITAR NEW ARCH
+        script: |
+          cd "$WORKING_DIRECTORY"
+          
+          echo "📝 Verificando app.json original:"
+          cat app.json
+          
+          echo ""
+          echo "🔧 Criando app.json SEM newArchEnabled..."
+          
+          cat > app.json <<'APPJSON'
+          {
+            "expo": {
+              "name": "Coin Box",
+              "slug": "coin-box",
+              "version": "1.0.0",
+              "orientation": "portrait",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#ffffff"
+              },
+              "android": {
+                "package": "com.nexa.cbox",
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/icon.png",
+                  "backgroundColor": "#ffffff"
+                },
+                "jsEngine": "hermes",
+                "versionCode": 1
+              },
+              "ios": {
+                "bundleIdentifier": "com.nexa.cbox"
+              },
+              "plugins": [
+                [
+                  "expo-build-properties",
+                  {
+                    "android": {
+                      "newArchEnabled": false
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+          APPJSON
+          
+          echo ""
+          echo "✅ app.json corrigido:"
+          cat app.json
+
+      - name: Instalar expo-build-properties
+        script: |
+          cd "$WORKING_DIRECTORY"
+          npm install expo-build-properties --save-dev --no-audit
+
       - name: Expo prebuild (android)
         script: |
           cd "$WORKING_DIRECTORY"
           rm -rf android
           npx expo prebuild --platform android --clean
+
+      - name: Verificar gradle.properties
+        script: |
+          cd "$WORKING_DIRECTORY"
+          echo "📝 Verificando gradle.properties:"
+          cat android/gradle.properties | grep -i "newArch" || echo "Nenhuma configuração de newArch encontrada"
+          
+          echo ""
+          echo "🔧 Garantindo que New Architecture está DESABILITADA:"
+          
+          # Remover qualquer configuração existente
+          sed -i '' '/newArchEnabled/d' android/gradle.properties
+          
+          # Adicionar configuração explícita
+          echo "newArchEnabled=false" >> android/gradle.properties
+          
+          echo ""
+          echo "✅ gradle.properties atualizado:"
+          cat android/gradle.properties | tail -5
 
       - name: Substituir build.gradle
         script: |
@@ -142,7 +220,7 @@ workflows:
           }
           EOFGRADLE
 
-      - name: Corrigir MainApplication.kt - SEM LOAD()
+      - name: Corrigir MainApplication.kt
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/src/main/java/com/nexa/cbox/MainApplication.kt <<'EOFKOTLIN'
@@ -157,7 +235,6 @@ workflows:
           import com.facebook.react.ReactApplication
           import com.facebook.react.ReactNativeHost
           import com.facebook.react.ReactPackage
-          import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
           import com.facebook.react.defaults.DefaultReactNativeHost
           import com.facebook.soloader.SoLoader
           
@@ -165,53 +242,34 @@ workflows:
             override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
               this,
               object : DefaultReactNativeHost(this) {
-                override fun getPackages(): List<ReactPackage> {
-                  val packages = PackageList(this).packages
-                  Log.d("CoinBox", "✅ Loaded ${packages.size} packages")
-                  return packages
-                }
+                override fun getPackages(): List<ReactPackage> = PackageList(this).packages
           
-                override fun getJSMainModuleName(): String {
-                  Log.d("CoinBox", "✅ JS Module: .expo/.virtual-metro-entry")
-                  return ".expo/.virtual-metro-entry"
-                }
+                override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
           
                 override fun getUseDeveloperSupport(): Boolean = false
           
                 override val isNewArchEnabled: Boolean = false
                 override val isHermesEnabled: Boolean = true
                 
-                override fun getBundleAssetName(): String {
-                  Log.d("CoinBox", "✅ Bundle: index.android.bundle")
-                  return "index.android.bundle"
-                }
+                override fun getBundleAssetName(): String = "index.android.bundle"
               }
             )
           
             override fun onCreate() {
               super.onCreate()
-              Log.d("CoinBox", "🚀 === APP INICIANDO ===")
+              Log.d("CoinBox", "🚀 App iniciando...")
               
               try {
                 SoLoader.init(this, false)
-                Log.d("CoinBox", "✅ SoLoader inicializado")
-                
-                // 🔥 CORREÇÃO CRÍTICA: SÓ CARREGA SE NEW ARCH ESTIVER ATIVADA
-                if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
-                  load()
-                  Log.d("CoinBox", "✅ New Architecture carregada")
-                } else {
-                  Log.d("CoinBox", "ℹ️ New Architecture desabilitada (normal)")
-                }
+                Log.d("CoinBox", "✅ SoLoader OK")
                 
                 ApplicationLifecycleDispatcher.onApplicationCreate(this)
-                Log.d("CoinBox", "✅ Lifecycle dispatcher inicializado")
+                Log.d("CoinBox", "✅ Lifecycle OK")
                 
-                Log.d("CoinBox", "🎉 === APP INICIADO COM SUCESSO ===")
+                Log.d("CoinBox", "🎉 App iniciado com sucesso!")
               } catch (e: Exception) {
-                Log.e("CoinBox", "❌ ERRO FATAL durante inicialização", e)
+                Log.e("CoinBox", "❌ Erro fatal", e)
                 e.printStackTrace()
-                // NÃO fazer throw - deixar o erro ser mostrado mas não crashar imediatamente
               }
             }
           
@@ -240,16 +298,13 @@ workflows:
           class MainActivity : ReactActivity() {
           
             override fun onCreate(savedInstanceState: Bundle?) {
-              Log.d("CoinBox", "🏁 MainActivity INICIANDO")
+              Log.d("CoinBox", "🏁 Activity iniciando")
               setTheme(R.style.AppTheme)
               super.onCreate(savedInstanceState)
-              Log.d("CoinBox", "✅ MainActivity CRIADA")
+              Log.d("CoinBox", "✅ Activity criada")
             }
           
-            override fun getMainComponentName(): String {
-              Log.d("CoinBox", "📱 Main component: main")
-              return "main"
-            }
+            override fun getMainComponentName(): String = "main"
           
             override fun createReactActivityDelegate(): ReactActivityDelegate {
               return ReactActivityDelegateWrapper(
@@ -275,54 +330,21 @@ workflows:
           }
           EOFKOTLIN
 
-      - name: Verificar dependências críticas
+      - name: Testar bundle
         script: |
           cd "$WORKING_DIRECTORY"
-          echo "🔍 === VERIFICANDO DEPENDÊNCIAS ==="
-          
-          echo "📦 React Native:"
-          node -p "require('./node_modules/react-native/package.json').version"
-          
-          echo "📦 Expo:"
-          node -p "require('./node_modules/expo/package.json').version"
-          
-          echo "📦 React:"
-          node -p "require('./node_modules/react/package.json').version"
-          
-          echo ""
-          echo "📱 Verificando módulos nativos críticos:"
-          ls -la node_modules/react-native-reanimated 2>/dev/null && echo "✅ reanimated" || echo "❌ reanimated"
-          ls -la node_modules/react-native-gesture-handler 2>/dev/null && echo "✅ gesture-handler" || echo "❌ gesture-handler"
-          ls -la node_modules/react-native-screens 2>/dev/null && echo "✅ screens" || echo "❌ screens"
-
-      - name: Testar bundle ANTES do build
-        script: |
-          cd "$WORKING_DIRECTORY"
-          echo "🧪 === TESTANDO BUNDLE JAVASCRIPT ==="
-          
-          mkdir -p /tmp/test-bundle
+          echo "🧪 Testando criação do bundle..."
           
           npx expo export:embed \
             --platform android \
-            --bundle-output /tmp/test-bundle/index.android.bundle \
-            --assets-dest /tmp/test-bundle \
+            --bundle-output /tmp/test.bundle \
             --dev false \
             --minify false
           
-          if [ $? -eq 0 ]; then
-            echo "✅ Bundle criado com sucesso!"
-            echo "📦 Tamanho do bundle:"
-            du -h /tmp/test-bundle/index.android.bundle
-            
-            # Verificar se não está vazio
-            if [ -s /tmp/test-bundle/index.android.bundle ]; then
-              echo "✅ Bundle contém código"
-            else
-              echo "❌ ERRO: Bundle está vazio!"
-              exit 1
-            fi
+          if [ -s /tmp/test.bundle ]; then
+            echo "✅ Bundle criado: $(du -h /tmp/test.bundle | cut -f1)"
           else
-            echo "❌ ERRO ao criar bundle!"
+            echo "❌ Bundle vazio ou com erro!"
             exit 1
           fi
 
@@ -330,40 +352,23 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
-          echo "🧹 Limpando build anterior..."
           ./gradlew clean
-          
-          echo "🔨 Compilando APK..."
-          ./gradlew assembleRelease --stacktrace --info
+          ./gradlew assembleRelease --stacktrace
 
-      - name: Verificar e copiar APK
+      - name: Copiar APK
         script: |
           cd "$WORKING_DIRECTORY"
-          echo "==> APKs gerados:"
-          find android/app/build/outputs/apk -name "*.apk" -type f -exec ls -lh {} \;
-          
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*arm64-v8a-release.apk" -type f | head -1)
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-          fi
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           
           if [ -z "$APK_PATH" ]; then
-            echo "❌ Erro: Nenhum APK encontrado!"
+            echo "❌ APK não encontrado!"
             exit 1
           fi
           
-          echo ""
-          echo "📦 Conteúdo do APK:"
-          unzip -l "$APK_PATH" | grep -E "(index.android.bundle|assets|\.so$)" | head -30
-          
           mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/CoinBox-v1.0.apk"
+          cp "$APK_PATH" "$CM_BUILD_DIR/CoinBox.apk"
           
-          echo ""
-          echo "==> ✅ APK FINAL:"
-          ls -lh "$CM_BUILD_DIR/CoinBox-v1.0.apk"
-          echo ""
-          echo "🎉 BUILD CONCLUÍDO COM SUCESSO!"
+          echo "✅ APK: $(ls -lh $CM_BUILD_DIR/CoinBox.apk)"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
