@@ -1,4 +1,4 @@
-// App.tsx
+/* App.tsx
 import React, { useState, useEffect } from 'react';
 import { StatusBar as RNStatusBar, StyleSheet, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -106,3 +106,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+*/
