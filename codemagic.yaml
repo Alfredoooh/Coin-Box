@@ -1,6 +1,6 @@
 workflows:
-  react-native-android-fixed:
-    name: React Native Android - OTIMIZADO E SEGURO v2
+  react-native-android-debug:
+    name: React Native Android - DEBUG VERSION
     max_build_duration: 60
     environment:
       vars:
@@ -23,7 +23,7 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Substituir build.gradle otimizado
+      - name: Substituir build.gradle - VERSÃO DEBUG
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/build.gradle <<'EOFGRADLE'
@@ -46,7 +46,7 @@ workflows:
               hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
               codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
               
-              enableBundleCompression = true
+              enableBundleCompression = false
               bundleCommand = "export:embed"
               
               cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
@@ -64,7 +64,7 @@ workflows:
                   minSdk 24
                   targetSdk rootProject.ext.targetSdkVersion
                   versionCode 1
-                  versionName "1.0"
+                  versionName "1.0-debug"
                   buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
               }
 
@@ -80,13 +80,12 @@ workflows:
               buildTypes {
                   release {
                       signingConfig signingConfigs.debug
-                      minifyEnabled true
-                      shrinkResources true
-                      crunchPngs true
+                      minifyEnabled false
+                      shrinkResources false
+                      crunchPngs false
                       zipAlignEnabled true
-                      debuggable false
-                      jniDebuggable false
-                      proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                      debuggable true
+                      jniDebuggable true
                   }
               }
               
@@ -105,13 +104,14 @@ workflows:
                   }
                   resources {
                       excludes += [
-                          'META-INF/**',
-                          '**/*.kotlin_module',
-                          '**/*.version',
-                          '**/*.properties',
-                          'kotlin/**',
-                          'DebugProbesKt.bin',
-                          'okhttp3/internal/publicsuffix/publicsuffixes.gz'
+                          'META-INF/DEPENDENCIES',
+                          'META-INF/LICENSE',
+                          'META-INF/LICENSE.txt',
+                          'META-INF/license.txt',
+                          'META-INF/NOTICE',
+                          'META-INF/NOTICE.txt',
+                          'META-INF/notice.txt',
+                          'META-INF/ASL2.0'
                       ]
                   }
                   pickFirst 'lib/*/libc++_shared.so'
@@ -126,175 +126,6 @@ workflows:
           }
           EOFGRADLE
 
-      - name: Criar proguard-rules.pro COMPLETO
-        script: |
-          cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
-          # ========================================
-          # REGRAS PROGUARD SEGURAS PARA REACT NATIVE + EXPO
-          # ========================================
-          
-          # Manter atributos essenciais
-          -keepattributes *Annotation*
-          -keepattributes Signature
-          -keepattributes Exceptions
-          -keepattributes InnerClasses
-          -keepattributes EnclosingMethod
-          -keepattributes SourceFile,LineNumberTable
-          
-          # ========================================
-          # REACT NATIVE - CRÍTICO
-          # ========================================
-          -keep class com.facebook.react.** { *; }
-          -keep class com.facebook.hermes.** { *; }
-          -keep class com.facebook.jni.** { *; }
-          -keep class com.facebook.soloader.** { *; }
-          
-          # TurboModules e Fabric
-          -keep class com.facebook.react.turbomodule.** { *; }
-          -keep class com.facebook.react.fabric.** { *; }
-          -keep class com.facebook.react.uimanager.** { *; }
-          -keep class com.facebook.react.bridge.** { *; }
-          -keep class com.facebook.react.modules.** { *; }
-          
-          # ViewManagers customizados
-          -keep class * extends com.facebook.react.uimanager.ViewManager { *; }
-          -keep class * extends com.facebook.react.bridge.ReactContextBaseJavaModule { *; }
-          -keep class * implements com.facebook.react.bridge.NativeModule { *; }
-          
-          # ========================================
-          # EXPO - CRÍTICO
-          # ========================================
-          -keep class expo.modules.** { *; }
-          -keep class com.swmansion.** { *; }
-          -keep interface expo.modules.** { *; }
-          
-          # Expo modules específicos
-          -keep class expo.modules.core.interfaces.Package { *; }
-          -keep class * implements expo.modules.core.interfaces.Package { *; }
-          
-          # ========================================
-          # JSI (JavaScript Interface)
-          # ========================================
-          -keep class com.facebook.jsi.** { *; }
-          
-          # ========================================
-          # COIL (Image Loading) - FIX DO ERRO
-          # ========================================
-          -keep class coil.** { *; }
-          -keep class coil3.** { *; }
-          -keep interface coil.** { *; }
-          -keep interface coil3.** { *; }
-          -dontwarn coil.**
-          -dontwarn coil3.**
-          
-          # ========================================
-          # REACT NATIVE LIBRARIES COMUNS
-          # ========================================
-          # React Native Screens
-          -keep class com.swmansion.rnscreens.** { *; }
-          
-          # React Native Gesture Handler
-          -keep class com.swmansion.gesturehandler.** { *; }
-          
-          # React Native Reanimated
-          -keep class com.swmansion.reanimated.** { *; }
-          
-          # React Native SVG
-          -keep class com.horcrux.svg.** { *; }
-          
-          # React Native Vector Icons
-          -keep class com.oblador.vectoricons.** { *; }
-          
-          # React Native WebView
-          -keep class com.reactnativecommunity.webview.** { *; }
-          
-          # React Native Safe Area Context
-          -keep class com.th3rdwave.safeareacontext.** { *; }
-          
-          # ========================================
-          # JAVASCRIPT TO NATIVE BRIDGE
-          # ========================================
-          -keepclassmembers class * {
-              @com.facebook.react.uimanager.annotations.ReactProp <methods>;
-              @com.facebook.react.uimanager.annotations.ReactPropGroup <methods>;
-          }
-          
-          -keepclassmembers class * {
-              @com.facebook.react.bridge.ReactMethod <methods>;
-          }
-          
-          # ========================================
-          # REFLECTION - Usado por React Native
-          # ========================================
-          -keepclassmembers class * {
-              public <init>(...);
-          }
-          
-          # ========================================
-          # WARNINGS - Suprimir avisos conhecidos
-          # ========================================
-          -dontwarn com.facebook.react.**
-          -dontwarn com.facebook.hermes.**
-          -dontwarn okhttp3.**
-          -dontwarn okio.**
-          -dontwarn javax.annotation.**
-          -dontwarn com.google.android.gms.**
-          -dontwarn org.conscrypt.**
-          
-          # ========================================
-          # OTIMIZAÇÕES SEGURAS
-          # ========================================
-          # Remove logs apenas em produção (seguro)
-          -assumenosideeffects class android.util.Log {
-              public static *** d(...);
-              public static *** v(...);
-          }
-          
-          # Mantém nomes de classes de erro para debug
-          -keepnames class * extends java.lang.Exception
-          
-          # ========================================
-          # OUTRAS BIBLIOTECAS COMUNS
-          # ========================================
-          # OkHttp
-          -keep class okhttp3.** { *; }
-          -keep interface okhttp3.** { *; }
-          
-          # Gson (se usar)
-          -keep class com.google.gson.** { *; }
-          -keep class * implements com.google.gson.TypeAdapter
-          
-          # Kotlin
-          -keep class kotlin.** { *; }
-          -keep class kotlinx.** { *; }
-          
-          # Coroutines
-          -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
-          -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
-          -keepclassmembers class kotlinx.coroutines.** {
-              volatile <fields>;
-          }
-          
-          # ========================================
-          # NATIVE LIBRARIES
-          # ========================================
-          -keep class * {
-              native <methods>;
-          }
-          
-          # ========================================
-          # SERIALIZAÇÃO (se usar com AsyncStorage, etc)
-          # ========================================
-          -keepclassmembers class * implements java.io.Serializable {
-              private static final java.io.ObjectStreamField[] serialPersistentFields;
-              private void writeObject(java.io.ObjectOutputStream);
-              private void readObject(java.io.ObjectInputStream);
-              java.lang.Object writeReplace();
-              java.lang.Object readResolve();
-          }
-          PROGUARDEOF
-
       - name: Corrigir MainApplication.kt
         script: |
           cd "$WORKING_DIRECTORY"
@@ -303,6 +134,7 @@ workflows:
           
           import android.app.Application
           import android.content.res.Configuration
+          import android.util.Log
           import expo.modules.ApplicationLifecycleDispatcher
           import expo.modules.ReactNativeHostWrapper
           import com.facebook.react.PackageList
@@ -319,10 +151,14 @@ workflows:
               object : DefaultReactNativeHost(this) {
                 override fun getPackages(): List<ReactPackage> {
                   val packages = PackageList(this).packages
+                  Log.d("MainApplication", "Loaded ${packages.size} packages")
                   return packages
                 }
           
-                override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
+                override fun getJSMainModuleName(): String {
+                  Log.d("MainApplication", "JS Module: .expo/.virtual-metro-entry")
+                  return ".expo/.virtual-metro-entry"
+                }
           
                 override fun getUseDeveloperSupport(): Boolean = false
           
@@ -333,9 +169,18 @@ workflows:
           
             override fun onCreate() {
               super.onCreate()
-              SoLoader.init(this, false)
-              load()
-              ApplicationLifecycleDispatcher.onApplicationCreate(this)
+              Log.d("MainApplication", "=== APP STARTING ===")
+              try {
+                SoLoader.init(this, false)
+                Log.d("MainApplication", "SoLoader initialized")
+                load()
+                Log.d("MainApplication", "Architecture loaded")
+                ApplicationLifecycleDispatcher.onApplicationCreate(this)
+                Log.d("MainApplication", "Lifecycle dispatcher initialized")
+              } catch (e: Exception) {
+                Log.e("MainApplication", "ERROR during initialization", e)
+                throw e
+              }
             }
           
             override fun onConfigurationChanged(newConfig: Configuration) {
@@ -345,7 +190,28 @@ workflows:
           }
           EOFKOTLIN
 
-      - name: Testar bundle ANTES do build
+      - name: Verificar se o bundle JS existe
+        script: |
+          cd "$WORKING_DIRECTORY"
+          echo "🔍 === VERIFICANDO ESTRUTURA DO PROJETO ==="
+          
+          echo "📁 Arquivos principais:"
+          ls -la app.json package.json 2>/dev/null || echo "⚠️ Arquivos de config não encontrados!"
+          
+          echo ""
+          echo "📱 Verificando entry point:"
+          if [ -f "index.js" ]; then
+            echo "✅ index.js encontrado"
+            head -5 index.js
+          else
+            echo "⚠️ index.js NÃO encontrado"
+          fi
+          
+          echo ""
+          echo "📦 Verificando node_modules críticos:"
+          ls -la node_modules/expo node_modules/react-native 2>/dev/null | head -5
+
+      - name: Testar bundle em modo debug
         script: |
           cd "$WORKING_DIRECTORY"
           echo "🧪 === TESTANDO BUNDLE JAVASCRIPT ==="
@@ -356,29 +222,33 @@ workflows:
             --platform android \
             --bundle-output /tmp/test-bundle/index.android.bundle \
             --assets-dest /tmp/test-bundle \
-            --dev false
+            --dev false \
+            --minify false
           
           if [ $? -eq 0 ]; then
             echo "✅ Bundle criado com sucesso!"
             echo "📦 Tamanho do bundle:"
             du -h /tmp/test-bundle/index.android.bundle
+            echo ""
+            echo "🔍 Primeiras linhas do bundle:"
+            head -20 /tmp/test-bundle/index.android.bundle
           else
             echo "❌ ERRO ao criar bundle!"
             exit 1
           fi
 
-      - name: Build APK otimizado
+      - name: Build APK em modo debug
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
           ./gradlew clean
-          ./gradlew assembleRelease --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx4096m" --no-build-cache
+          ./gradlew assembleRelease --stacktrace --info
 
-      - name: Verificar tamanho e copiar APK
+      - name: Verificar APK gerado
         script: |
           cd "$WORKING_DIRECTORY"
           echo "==> APKs gerados:"
-          ls -lh android/app/build/outputs/apk/release/*.apk
+          find android/app/build/outputs/apk -name "*.apk" -type f -exec ls -lh {} \;
           
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*arm64-v8a-release.apk" -type f | head -1)
           if [ -z "$APK_PATH" ]; then
@@ -390,11 +260,16 @@ workflows:
             exit 1
           fi
           
-          mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
+          echo ""
+          echo "📦 Analisando conteúdo do APK:"
+          unzip -l "$APK_PATH" | grep -E "(assets|\.so$|\.js$)" | head -30
           
+          mkdir -p "$CM_BUILD_DIR"
+          cp "$APK_PATH" "$CM_BUILD_DIR/app-debug.apk"
+          
+          echo ""
           echo "==> ✅ Tamanho final do APK:"
-          du -h "$CM_BUILD_DIR/app-release.apk"
+          du -h "$CM_BUILD_DIR/app-debug.apk"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
