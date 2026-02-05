@@ -1,6 +1,6 @@
 workflows:
-  react-native-android-debug:
-    name: React Native Android - DEBUG VERSION
+  react-native-android-fixed:
+    name: React Native Android - CORRIGIDO DEFINITIVO
     max_build_duration: 60
     environment:
       vars:
@@ -23,7 +23,7 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Substituir build.gradle - VERSÃO DEBUG
+      - name: Substituir build.gradle
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/build.gradle <<'EOFGRADLE'
@@ -65,7 +65,7 @@ workflows:
                   minSdk 24
                   targetSdk rootProject.ext.targetSdkVersion
                   versionCode 1
-                  versionName "1.0-debug"
+                  versionName "1.0"
                   buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
                   multiDexEnabled true
               }
@@ -142,7 +142,7 @@ workflows:
           }
           EOFGRADLE
 
-      - name: Corrigir MainApplication.kt
+      - name: Corrigir MainApplication.kt - SEM LOAD()
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/src/main/java/com/nexa/cbox/MainApplication.kt <<'EOFKOTLIN'
@@ -167,12 +167,12 @@ workflows:
               object : DefaultReactNativeHost(this) {
                 override fun getPackages(): List<ReactPackage> {
                   val packages = PackageList(this).packages
-                  Log.d("MainApplication", "Loaded ${packages.size} packages")
+                  Log.d("CoinBox", "✅ Loaded ${packages.size} packages")
                   return packages
                 }
           
                 override fun getJSMainModuleName(): String {
-                  Log.d("MainApplication", "JS Module: .expo/.virtual-metro-entry")
+                  Log.d("CoinBox", "✅ JS Module: .expo/.virtual-metro-entry")
                   return ".expo/.virtual-metro-entry"
                 }
           
@@ -182,6 +182,7 @@ workflows:
                 override val isHermesEnabled: Boolean = true
                 
                 override fun getBundleAssetName(): String {
+                  Log.d("CoinBox", "✅ Bundle: index.android.bundle")
                   return "index.android.bundle"
                 }
               }
@@ -189,22 +190,28 @@ workflows:
           
             override fun onCreate() {
               super.onCreate()
-              Log.d("MainApplication", "=== APP STARTING ===")
+              Log.d("CoinBox", "🚀 === APP INICIANDO ===")
+              
               try {
                 SoLoader.init(this, false)
-                Log.d("MainApplication", "SoLoader initialized")
+                Log.d("CoinBox", "✅ SoLoader inicializado")
                 
+                // 🔥 CORREÇÃO CRÍTICA: SÓ CARREGA SE NEW ARCH ESTIVER ATIVADA
                 if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
                   load()
-                  Log.d("MainApplication", "New Architecture loaded")
+                  Log.d("CoinBox", "✅ New Architecture carregada")
+                } else {
+                  Log.d("CoinBox", "ℹ️ New Architecture desabilitada (normal)")
                 }
                 
                 ApplicationLifecycleDispatcher.onApplicationCreate(this)
-                Log.d("MainApplication", "Lifecycle dispatcher initialized")
-                Log.d("MainApplication", "=== APP STARTED SUCCESSFULLY ===")
+                Log.d("CoinBox", "✅ Lifecycle dispatcher inicializado")
+                
+                Log.d("CoinBox", "🎉 === APP INICIADO COM SUCESSO ===")
               } catch (e: Exception) {
-                Log.e("MainApplication", "ERROR during initialization", e)
+                Log.e("CoinBox", "❌ ERRO FATAL durante inicialização", e)
                 e.printStackTrace()
+                // NÃO fazer throw - deixar o erro ser mostrado mas não crashar imediatamente
               }
             }
           
@@ -233,14 +240,14 @@ workflows:
           class MainActivity : ReactActivity() {
           
             override fun onCreate(savedInstanceState: Bundle?) {
-              Log.d("MainActivity", "=== ACTIVITY STARTING ===")
+              Log.d("CoinBox", "🏁 MainActivity INICIANDO")
               setTheme(R.style.AppTheme)
               super.onCreate(savedInstanceState)
-              Log.d("MainActivity", "=== ACTIVITY CREATED ===")
+              Log.d("CoinBox", "✅ MainActivity CRIADA")
             }
           
             override fun getMainComponentName(): String {
-              Log.d("MainActivity", "Main component: main")
+              Log.d("CoinBox", "📱 Main component: main")
               return "main"
             }
           
@@ -268,28 +275,27 @@ workflows:
           }
           EOFKOTLIN
 
-      - name: Verificar se o bundle JS existe
+      - name: Verificar dependências críticas
         script: |
           cd "$WORKING_DIRECTORY"
-          echo "🔍 === VERIFICANDO ESTRUTURA DO PROJETO ==="
+          echo "🔍 === VERIFICANDO DEPENDÊNCIAS ==="
           
-          echo "📁 Arquivos principais:"
-          ls -la app.json package.json 2>/dev/null || echo "⚠️ Arquivos de config não encontrados!"
+          echo "📦 React Native:"
+          node -p "require('./node_modules/react-native/package.json').version"
           
-          echo ""
-          echo "📱 Verificando entry point:"
-          if [ -f "index.js" ]; then
-            echo "✅ index.js encontrado"
-            head -5 index.js
-          else
-            echo "⚠️ index.js NÃO encontrado"
-          fi
+          echo "📦 Expo:"
+          node -p "require('./node_modules/expo/package.json').version"
+          
+          echo "📦 React:"
+          node -p "require('./node_modules/react/package.json').version"
           
           echo ""
-          echo "📦 Verificando node_modules críticos:"
-          ls -la node_modules/expo node_modules/react-native 2>/dev/null | head -5
+          echo "📱 Verificando módulos nativos críticos:"
+          ls -la node_modules/react-native-reanimated 2>/dev/null && echo "✅ reanimated" || echo "❌ reanimated"
+          ls -la node_modules/react-native-gesture-handler 2>/dev/null && echo "✅ gesture-handler" || echo "❌ gesture-handler"
+          ls -la node_modules/react-native-screens 2>/dev/null && echo "✅ screens" || echo "❌ screens"
 
-      - name: Testar bundle em modo debug
+      - name: Testar bundle ANTES do build
         script: |
           cd "$WORKING_DIRECTORY"
           echo "🧪 === TESTANDO BUNDLE JAVASCRIPT ==="
@@ -307,22 +313,30 @@ workflows:
             echo "✅ Bundle criado com sucesso!"
             echo "📦 Tamanho do bundle:"
             du -h /tmp/test-bundle/index.android.bundle
-            echo ""
-            echo "🔍 Primeiras linhas do bundle:"
-            head -20 /tmp/test-bundle/index.android.bundle
+            
+            # Verificar se não está vazio
+            if [ -s /tmp/test-bundle/index.android.bundle ]; then
+              echo "✅ Bundle contém código"
+            else
+              echo "❌ ERRO: Bundle está vazio!"
+              exit 1
+            fi
           else
             echo "❌ ERRO ao criar bundle!"
             exit 1
           fi
 
-      - name: Build APK em modo debug
+      - name: Build APK
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
+          echo "🧹 Limpando build anterior..."
           ./gradlew clean
+          
+          echo "🔨 Compilando APK..."
           ./gradlew assembleRelease --stacktrace --info
 
-      - name: Verificar APK gerado
+      - name: Verificar e copiar APK
         script: |
           cd "$WORKING_DIRECTORY"
           echo "==> APKs gerados:"
@@ -339,15 +353,17 @@ workflows:
           fi
           
           echo ""
-          echo "📦 Analisando conteúdo do APK:"
-          unzip -l "$APK_PATH" | grep -E "(assets|\.so$|\.js$)" | head -30
+          echo "📦 Conteúdo do APK:"
+          unzip -l "$APK_PATH" | grep -E "(index.android.bundle|assets|\.so$)" | head -30
           
           mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/app-debug.apk"
+          cp "$APK_PATH" "$CM_BUILD_DIR/CoinBox-v1.0.apk"
           
           echo ""
-          echo "==> ✅ Tamanho final do APK:"
-          du -h "$CM_BUILD_DIR/app-debug.apk"
+          echo "==> ✅ APK FINAL:"
+          ls -lh "$CM_BUILD_DIR/CoinBox-v1.0.apk"
+          echo ""
+          echo "🎉 BUILD CONCLUÍDO COM SUCESSO!"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
