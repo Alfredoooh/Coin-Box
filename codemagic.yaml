@@ -1,6 +1,6 @@
 workflows:
   react-native-android-fixed:
-    name: React Native Android - OTIMIZADO E SEGURO
+    name: React Native Android - OTIMIZADO E SEGURO v2
     max_build_duration: 60
     environment:
       vars:
@@ -126,7 +126,7 @@ workflows:
           }
           EOFGRADLE
 
-      - name: Criar proguard-rules.pro SEGURO
+      - name: Criar proguard-rules.pro COMPLETO
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
@@ -177,6 +177,40 @@ workflows:
           # JSI (JavaScript Interface)
           # ========================================
           -keep class com.facebook.jsi.** { *; }
+          
+          # ========================================
+          # COIL (Image Loading) - FIX DO ERRO
+          # ========================================
+          -keep class coil.** { *; }
+          -keep class coil3.** { *; }
+          -keep interface coil.** { *; }
+          -keep interface coil3.** { *; }
+          -dontwarn coil.**
+          -dontwarn coil3.**
+          
+          # ========================================
+          # REACT NATIVE LIBRARIES COMUNS
+          # ========================================
+          # React Native Screens
+          -keep class com.swmansion.rnscreens.** { *; }
+          
+          # React Native Gesture Handler
+          -keep class com.swmansion.gesturehandler.** { *; }
+          
+          # React Native Reanimated
+          -keep class com.swmansion.reanimated.** { *; }
+          
+          # React Native SVG
+          -keep class com.horcrux.svg.** { *; }
+          
+          # React Native Vector Icons
+          -keep class com.oblador.vectoricons.** { *; }
+          
+          # React Native WebView
+          -keep class com.reactnativecommunity.webview.** { *; }
+          
+          # React Native Safe Area Context
+          -keep class com.th3rdwave.safeareacontext.** { *; }
           
           # ========================================
           # JAVASCRIPT TO NATIVE BRIDGE
@@ -234,6 +268,13 @@ workflows:
           # Kotlin
           -keep class kotlin.** { *; }
           -keep class kotlinx.** { *; }
+          
+          # Coroutines
+          -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+          -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+          -keepclassmembers class kotlinx.coroutines.** {
+              volatile <fields>;
+          }
           
           # ========================================
           # NATIVE LIBRARIES
