@@ -2,20 +2,23 @@ workflows:
   react-native-android-fixed:
     name: React Native Android - NEW ARCH DISABLED
     max_build_duration: 60
+    instance_type: mac_mini_m2
     environment:
       vars:
         WORKING_DIRECTORY: "coin-box"
-      node: latest
+      node: 18.19.0
+      java: 17
     cache:
       cache_paths:
         - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
         - $WORKING_DIRECTORY/node_modules
     scripts:
       - name: Install dependencies
         script: |
           cd "$WORKING_DIRECTORY"
-          npm install --no-audit --no-fund
-          npm install --save-dev @react-native-community/cli@latest --no-audit
+          npm install --no-audit --no-fund --legacy-peer-deps
+          npm install --save-dev @react-native-community/cli@latest --no-audit --legacy-peer-deps
 
       - name: CORRIGIR app.json - DESABILITAR NEW ARCH
         script: |
@@ -28,44 +31,47 @@ workflows:
           echo "🔧 Criando app.json SEM newArchEnabled..."
           
           cat > app.json <<'APPJSON'
-          {
-            "expo": {
-              "name": "Coin Box",
-              "slug": "coin-box",
-              "version": "1.0.0",
-              "orientation": "portrait",
-              "icon": "./assets/icon.png",
-              "userInterfaceStyle": "light",
-              "splash": {
-                "image": "./assets/splash.png",
-                "resizeMode": "contain",
-                "backgroundColor": "#ffffff"
-              },
-              "android": {
-                "package": "com.nexa.cbox",
-                "adaptiveIcon": {
-                  "foregroundImage": "./assets/icon.png",
-                  "backgroundColor": "#ffffff"
-                },
-                "jsEngine": "hermes",
-                "versionCode": 1
-              },
-              "ios": {
-                "bundleIdentifier": "com.nexa.cbox"
-              },
-              "plugins": [
-                [
-                  "expo-build-properties",
-                  {
-                    "android": {
-                      "newArchEnabled": false
-                    }
-                  }
-                ]
-              ]
-            }
+{
+  "expo": {
+    "name": "Coin Box",
+    "slug": "coin-box",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "android": {
+      "package": "com.nexa.cbox",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "jsEngine": "hermes",
+      "versionCode": 1
+    },
+    "ios": {
+      "bundleIdentifier": "com.nexa.cbox"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": false,
+            "usesCleartextTraffic": true,
+            "enableProguardInReleaseBuilds": false,
+            "enableShrinkResourcesInReleaseBuilds": false
           }
-          APPJSON
+        }
+      ]
+    ]
+  }
+}
+APPJSON
           
           echo ""
           echo "✅ app.json corrigido:"
@@ -74,7 +80,7 @@ workflows:
       - name: Instalar expo-build-properties
         script: |
           cd "$WORKING_DIRECTORY"
-          npm install expo-build-properties --save-dev --no-audit
+          npm install expo-build-properties --save-dev --no-audit --legacy-peer-deps
 
       - name: Expo prebuild (android)
         script: |
@@ -82,253 +88,309 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Verificar gradle.properties
+      - name: Verificar e corrigir gradle.properties
         script: |
           cd "$WORKING_DIRECTORY"
           echo "📝 Verificando gradle.properties:"
           cat android/gradle.properties | grep -i "newArch" || echo "Nenhuma configuração de newArch encontrada"
           
           echo ""
-          echo "🔧 Garantindo que New Architecture está DESABILITADA:"
+          echo "🔧 Configurando gradle.properties otimizado:"
           
-          # Remover qualquer configuração existente
-          sed -i '' '/newArchEnabled/d' android/gradle.properties
-          
-          # Adicionar configuração explícita
-          echo "newArchEnabled=false" >> android/gradle.properties
+          cat > android/gradle.properties <<'EOFPROPS'
+# Gradle
+org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+org.gradle.parallel=true
+org.gradle.configureondemand=true
+org.gradle.daemon=true
+org.gradle.caching=true
+
+# Android
+android.useAndroidX=true
+android.enableJetifier=true
+
+# Desabilitar nova arquitetura
+newArchEnabled=false
+
+# React Native
+hermesEnabled=true
+
+# Build optimization
+android.enableR8=false
+android.enableR8.fullMode=false
+android.enableProguardInReleaseBuilds=false
+android.enableShrinkResourcesInReleaseBuilds=false
+
+# Debugging
+org.gradle.debug=false
+org.gradle.logging.level=info
+EOFPROPS
           
           echo ""
-          echo "✅ gradle.properties atualizado:"
-          cat android/gradle.properties | tail -5
+          echo "✅ gradle.properties configurado:"
+          cat android/gradle.properties
 
-      - name: Substituir build.gradle
+      - name: Corrigir gradle-wrapper.properties
+        script: |
+          cd "$WORKING_DIRECTORY"
+          
+          echo "🔧 Configurando gradle wrapper para versão estável..."
+          
+          cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOFWRAPPER'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.9-all.zip
+networkTimeout=10000
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOFWRAPPER
+          
+          echo "✅ Gradle wrapper configurado para versão 8.9"
+
+      - name: Substituir build.gradle do app
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/build.gradle <<'EOFGRADLE'
-          apply plugin: "com.android.application"
-          apply plugin: "org.jetbrains.kotlin.android"
-          apply plugin: "com.facebook.react"
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
 
-          def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
-          react {
-              def entryFileScript = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir)
-              entryFileScript.waitFor()
-              if (entryFileScript.exitValue() == 0) {
-                  entryFile = file(entryFileScript.text.trim())
-              } else {
-                  entryFile = file("$projectRoot/index.js")
-              }
-              
-              reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-              hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
-              codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-              
-              enableBundleCompression = false
-              bundleCommand = "export:embed"
-              bundleAssetName = "index.android.bundle"
-              
-              cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
-              autolinkLibrariesWithApp()
-          }
+react {
+    def entryFileScript = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir)
+    entryFileScript.waitFor()
+    if (entryFileScript.exitValue() == 0) {
+        entryFile = file(entryFileScript.text.trim())
+    } else {
+        entryFile = file("$projectRoot/index.js")
+    }
+    
+    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    
+    enableBundleCompression = false
+    bundleCommand = "export:embed"
+    bundleAssetName = "index.android.bundle"
+    
+    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+    autolinkLibrariesWithApp()
+}
 
-          android {
-              ndkVersion rootProject.ext.ndkVersion
-              buildToolsVersion rootProject.ext.buildToolsVersion
-              compileSdk rootProject.ext.compileSdkVersion
-              namespace "com.nexa.cbox"
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.nexa.cbox"
 
-              defaultConfig {
-                  applicationId "com.nexa.cbox"
-                  minSdk 24
-                  targetSdk rootProject.ext.targetSdkVersion
-                  versionCode 1
-                  versionName "1.0"
-                  buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
-                  multiDexEnabled true
-              }
+    defaultConfig {
+        applicationId "com.nexa.cbox"
+        minSdk 24
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
+        multiDexEnabled true
+    }
 
-              signingConfigs {
-                  debug {
-                      storeFile file('debug.keystore')
-                      storePassword 'android'
-                      keyAlias 'androiddebugkey'
-                      keyPassword 'android'
-                  }
-              }
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
 
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                      minifyEnabled false
-                      shrinkResources false
-                      crunchPngs false
-                      zipAlignEnabled true
-                      debuggable true
-                      jniDebuggable true
-                  }
-              }
-              
-              splits {
-                  abi {
-                      enable true
-                      reset()
-                      include 'arm64-v8a'
-                      universalApk false
-                  }
-              }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+            crunchPngs false
+            zipAlignEnabled true
+            debuggable true
+            jniDebuggable true
+        }
+    }
+    
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a'
+            universalApk false
+        }
+    }
 
-              packagingOptions {
-                  jniLibs {
-                      useLegacyPackaging false
-                  }
-                  resources {
-                      excludes += [
-                          'META-INF/DEPENDENCIES',
-                          'META-INF/LICENSE',
-                          'META-INF/LICENSE.txt',
-                          'META-INF/license.txt',
-                          'META-INF/NOTICE',
-                          'META-INF/NOTICE.txt',
-                          'META-INF/notice.txt',
-                          'META-INF/ASL2.0',
-                          '**/kotlin/**',
-                          '**/*.kotlin_module'
-                      ]
-                  }
-                  pickFirst 'lib/*/libc++_shared.so'
-                  pickFirst 'lib/*/libfbjni.so'
-                  pickFirst 'lib/*/libjsi.so'
-              }
-              
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
-              
-              kotlinOptions {
-                  jvmTarget = '17'
-              }
-          }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/license.txt',
+                'META-INF/NOTICE',
+                'META-INF/NOTICE.txt',
+                'META-INF/notice.txt',
+                'META-INF/ASL2.0',
+                '**/kotlin/**',
+                '**/*.kotlin_module'
+            ]
+        }
+        pickFirst 'lib/*/libc++_shared.so'
+        pickFirst 'lib/*/libfbjni.so'
+        pickFirst 'lib/*/libjsi.so'
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
 
-          dependencies {
-              implementation("com.facebook.react:react-android")
-              implementation("com.facebook.react:hermes-android")
-              implementation("androidx.appcompat:appcompat:1.6.1")
-              implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-              implementation("androidx.multidex:multidex:2.0.1")
-          }
-          EOFGRADLE
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("androidx.multidex:multidex:2.0.1")
+}
+EOFGRADLE
+          
+          echo "✅ build.gradle do app configurado"
 
       - name: Corrigir MainApplication.kt
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/src/main/java/com/nexa/cbox/MainApplication.kt <<'EOFKOTLIN'
-          package com.nexa.cbox
+package com.nexa.cbox
+
+import android.app.Application
+import android.content.res.Configuration
+import android.util.Log
+import expo.modules.ApplicationLifecycleDispatcher
+import expo.modules.ReactNativeHostWrapper
+import com.facebook.react.PackageList
+import com.facebook.react.ReactApplication
+import com.facebook.react.ReactNativeHost
+import com.facebook.react.ReactPackage
+import com.facebook.react.defaults.DefaultReactNativeHost
+import com.facebook.soloader.SoLoader
+
+class MainApplication : Application(), ReactApplication {
+  override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
+    this,
+    object : DefaultReactNativeHost(this) {
+      override fun getPackages(): List<ReactPackage> = PackageList(this).packages
+
+      override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
+
+      override fun getUseDeveloperSupport(): Boolean = false
+
+      override val isNewArchEnabled: Boolean = false
+      override val isHermesEnabled: Boolean = true
+      
+      override fun getBundleAssetName(): String = "index.android.bundle"
+    }
+  )
+
+  override fun onCreate() {
+    super.onCreate()
+    Log.d("CoinBox", "🚀 App iniciando...")
+    
+    try {
+      SoLoader.init(this, false)
+      Log.d("CoinBox", "✅ SoLoader OK")
+      
+      ApplicationLifecycleDispatcher.onApplicationCreate(this)
+      Log.d("CoinBox", "✅ Lifecycle OK")
+      
+      Log.d("CoinBox", "🎉 App iniciado com sucesso!")
+    } catch (e: Exception) {
+      Log.e("CoinBox", "❌ Erro fatal", e)
+      e.printStackTrace()
+    }
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
+  }
+}
+EOFKOTLIN
           
-          import android.app.Application
-          import android.content.res.Configuration
-          import android.util.Log
-          import expo.modules.ApplicationLifecycleDispatcher
-          import expo.modules.ReactNativeHostWrapper
-          import com.facebook.react.PackageList
-          import com.facebook.react.ReactApplication
-          import com.facebook.react.ReactNativeHost
-          import com.facebook.react.ReactPackage
-          import com.facebook.react.defaults.DefaultReactNativeHost
-          import com.facebook.soloader.SoLoader
-          
-          class MainApplication : Application(), ReactApplication {
-            override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
-              this,
-              object : DefaultReactNativeHost(this) {
-                override fun getPackages(): List<ReactPackage> = PackageList(this).packages
-          
-                override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
-          
-                override fun getUseDeveloperSupport(): Boolean = false
-          
-                override val isNewArchEnabled: Boolean = false
-                override val isHermesEnabled: Boolean = true
-                
-                override fun getBundleAssetName(): String = "index.android.bundle"
-              }
-            )
-          
-            override fun onCreate() {
-              super.onCreate()
-              Log.d("CoinBox", "🚀 App iniciando...")
-              
-              try {
-                SoLoader.init(this, false)
-                Log.d("CoinBox", "✅ SoLoader OK")
-                
-                ApplicationLifecycleDispatcher.onApplicationCreate(this)
-                Log.d("CoinBox", "✅ Lifecycle OK")
-                
-                Log.d("CoinBox", "🎉 App iniciado com sucesso!")
-              } catch (e: Exception) {
-                Log.e("CoinBox", "❌ Erro fatal", e)
-                e.printStackTrace()
-              }
-            }
-          
-            override fun onConfigurationChanged(newConfig: Configuration) {
-              super.onConfigurationChanged(newConfig)
-              ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
-            }
-          }
-          EOFKOTLIN
+          echo "✅ MainApplication.kt configurado"
 
       - name: Corrigir MainActivity.kt
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/src/main/java/com/nexa/cbox/MainActivity.kt <<'EOFKOTLIN'
-          package com.nexa.cbox
+package com.nexa.cbox
+
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import com.facebook.react.ReactActivity
+import com.facebook.react.ReactActivityDelegate
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
+import com.facebook.react.defaults.DefaultReactActivityDelegate
+import expo.modules.ReactActivityDelegateWrapper
+
+class MainActivity : ReactActivity() {
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    Log.d("CoinBox", "🏁 Activity iniciando")
+    setTheme(R.style.AppTheme)
+    super.onCreate(savedInstanceState)
+    Log.d("CoinBox", "✅ Activity criada")
+  }
+
+  override fun getMainComponentName(): String = "main"
+
+  override fun createReactActivityDelegate(): ReactActivityDelegate {
+    return ReactActivityDelegateWrapper(
+      this,
+      BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
+      object : DefaultReactActivityDelegate(
+        this,
+        mainComponentName,
+        fabricEnabled
+      ) {}
+    )
+  }
+
+  override fun invokeDefaultOnBackPressed() {
+    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
+      if (!moveTaskToBack(false)) {
+        super.invokeDefaultOnBackPressed()
+      }
+      return
+    }
+    super.invokeDefaultOnBackPressed()
+  }
+}
+EOFKOTLIN
           
-          import android.os.Build
-          import android.os.Bundle
-          import android.util.Log
-          import com.facebook.react.ReactActivity
-          import com.facebook.react.ReactActivityDelegate
-          import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
-          import com.facebook.react.defaults.DefaultReactActivityDelegate
-          import expo.modules.ReactActivityDelegateWrapper
-          
-          class MainActivity : ReactActivity() {
-          
-            override fun onCreate(savedInstanceState: Bundle?) {
-              Log.d("CoinBox", "🏁 Activity iniciando")
-              setTheme(R.style.AppTheme)
-              super.onCreate(savedInstanceState)
-              Log.d("CoinBox", "✅ Activity criada")
-            }
-          
-            override fun getMainComponentName(): String = "main"
-          
-            override fun createReactActivityDelegate(): ReactActivityDelegate {
-              return ReactActivityDelegateWrapper(
-                this,
-                BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
-                object : DefaultReactActivityDelegate(
-                  this,
-                  mainComponentName,
-                  fabricEnabled
-                ) {}
-              )
-            }
-          
-            override fun invokeDefaultOnBackPressed() {
-              if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
-                if (!moveTaskToBack(false)) {
-                  super.invokeDefaultOnBackPressed()
-                }
-                return
-              }
-              super.invokeDefaultOnBackPressed()
-            }
-          }
-          EOFKOTLIN
+          echo "✅ MainActivity.kt configurado"
+
+      - name: Limpar cache Gradle
+        script: |
+          cd "$WORKING_DIRECTORY/android"
+          echo "🧹 Limpando cache do Gradle..."
+          rm -rf .gradle
+          rm -rf build
+          rm -rf app/build
+          echo "✅ Cache limpo"
 
       - name: Testar bundle
         script: |
@@ -342,40 +404,82 @@ workflows:
             --minify false
           
           if [ -s /tmp/test.bundle ]; then
-            echo "✅ Bundle criado: $(du -h /tmp/test.bundle | cut -f1)"
+            BUNDLE_SIZE=$(du -h /tmp/test.bundle | cut -f1)
+            echo "✅ Bundle criado com sucesso: $BUNDLE_SIZE"
           else
             echo "❌ Bundle vazio ou com erro!"
             exit 1
           fi
 
-      - name: Build APK
+      - name: Build APK com logs detalhados
         script: |
           cd "$WORKING_DIRECTORY/android"
+          
+          echo "🔨 Iniciando build do APK..."
+          echo "📊 Informações do sistema:"
+          echo "  - Java: $(java -version 2>&1 | head -n 1)"
+          echo "  - Node: $(node --version)"
+          echo "  - NPM: $(npm --version)"
+          echo ""
+          
           chmod +x ./gradlew
+          
+          echo "🧹 Executando clean..."
           ./gradlew clean
-          ./gradlew assembleRelease --stacktrace
+          
+          echo ""
+          echo "🏗️ Executando assembleRelease..."
+          ./gradlew assembleRelease \
+            --stacktrace \
+            --info \
+            --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
+          
+          echo ""
+          echo "✅ Build concluído!"
 
-      - name: Copiar APK
+      - name: Verificar e copiar APK
         script: |
           cd "$WORKING_DIRECTORY"
+          
+          echo "🔍 Procurando APK gerado..."
+          
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           
           if [ -z "$APK_PATH" ]; then
             echo "❌ APK não encontrado!"
+            echo "📁 Estrutura de diretórios:"
+            find android/app/build/outputs -type f 2>/dev/null || echo "Nenhum output encontrado"
             exit 1
           fi
           
           mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/CoinBox.apk"
           
-          echo "✅ APK: $(ls -lh $CM_BUILD_DIR/CoinBox.apk)"
+          APK_FINAL="$CM_BUILD_DIR/CoinBox-release.apk"
+          cp "$APK_PATH" "$APK_FINAL"
+          
+          echo ""
+          echo "✅ APK copiado com sucesso!"
+          echo "📱 Detalhes do APK:"
+          ls -lh "$APK_FINAL"
+          echo ""
+          echo "📦 SHA256:"
+          shasum -a 256 "$APK_FINAL" | cut -d' ' -f1
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
+      
     publishing:
       email:
         recipients:
           - seu-email@example.com
+        notify:
+          success: true
+          failure: true
+          
+      slack:
+        channel: '#builds'
+        notify_on_build_start: false
         notify:
           success: true
           failure: true
