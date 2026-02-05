@@ -48,6 +48,7 @@ workflows:
               
               enableBundleCompression = false
               bundleCommand = "export:embed"
+              bundleAssetName = "index.android.bundle"
               
               cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
               autolinkLibrariesWithApp()
@@ -66,6 +67,7 @@ workflows:
                   versionCode 1
                   versionName "1.0-debug"
                   buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
+                  multiDexEnabled true
               }
 
               signingConfigs {
@@ -111,18 +113,32 @@ workflows:
                           'META-INF/NOTICE',
                           'META-INF/NOTICE.txt',
                           'META-INF/notice.txt',
-                          'META-INF/ASL2.0'
+                          'META-INF/ASL2.0',
+                          '**/kotlin/**',
+                          '**/*.kotlin_module'
                       ]
                   }
                   pickFirst 'lib/*/libc++_shared.so'
                   pickFirst 'lib/*/libfbjni.so'
                   pickFirst 'lib/*/libjsi.so'
               }
+              
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
           }
 
           dependencies {
               implementation("com.facebook.react:react-android")
               implementation("com.facebook.react:hermes-android")
+              implementation("androidx.appcompat:appcompat:1.6.1")
+              implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+              implementation("androidx.multidex:multidex:2.0.1")
           }
           EOFGRADLE
 
@@ -164,6 +180,10 @@ workflows:
           
                 override val isNewArchEnabled: Boolean = false
                 override val isHermesEnabled: Boolean = true
+                
+                override fun getBundleAssetName(): String {
+                  return "index.android.bundle"
+                }
               }
             )
           
@@ -173,19 +193,77 @@ workflows:
               try {
                 SoLoader.init(this, false)
                 Log.d("MainApplication", "SoLoader initialized")
-                load()
-                Log.d("MainApplication", "Architecture loaded")
+                
+                if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+                  load()
+                  Log.d("MainApplication", "New Architecture loaded")
+                }
+                
                 ApplicationLifecycleDispatcher.onApplicationCreate(this)
                 Log.d("MainApplication", "Lifecycle dispatcher initialized")
+                Log.d("MainApplication", "=== APP STARTED SUCCESSFULLY ===")
               } catch (e: Exception) {
                 Log.e("MainApplication", "ERROR during initialization", e)
-                throw e
+                e.printStackTrace()
               }
             }
           
             override fun onConfigurationChanged(newConfig: Configuration) {
               super.onConfigurationChanged(newConfig)
               ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
+            }
+          }
+          EOFKOTLIN
+
+      - name: Corrigir MainActivity.kt
+        script: |
+          cd "$WORKING_DIRECTORY"
+          cat > android/app/src/main/java/com/nexa/cbox/MainActivity.kt <<'EOFKOTLIN'
+          package com.nexa.cbox
+          
+          import android.os.Build
+          import android.os.Bundle
+          import android.util.Log
+          import com.facebook.react.ReactActivity
+          import com.facebook.react.ReactActivityDelegate
+          import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
+          import com.facebook.react.defaults.DefaultReactActivityDelegate
+          import expo.modules.ReactActivityDelegateWrapper
+          
+          class MainActivity : ReactActivity() {
+          
+            override fun onCreate(savedInstanceState: Bundle?) {
+              Log.d("MainActivity", "=== ACTIVITY STARTING ===")
+              setTheme(R.style.AppTheme)
+              super.onCreate(savedInstanceState)
+              Log.d("MainActivity", "=== ACTIVITY CREATED ===")
+            }
+          
+            override fun getMainComponentName(): String {
+              Log.d("MainActivity", "Main component: main")
+              return "main"
+            }
+          
+            override fun createReactActivityDelegate(): ReactActivityDelegate {
+              return ReactActivityDelegateWrapper(
+                this,
+                BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
+                object : DefaultReactActivityDelegate(
+                  this,
+                  mainComponentName,
+                  fabricEnabled
+                ) {}
+              )
+            }
+          
+            override fun invokeDefaultOnBackPressed() {
+              if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
+                if (!moveTaskToBack(false)) {
+                  super.invokeDefaultOnBackPressed()
+                }
+                return
+              }
+              super.invokeDefaultOnBackPressed()
             }
           }
           EOFKOTLIN
