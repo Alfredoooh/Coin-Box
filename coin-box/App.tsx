@@ -1,4 +1,4 @@
-//App.tsx
+/*App.tsx
 import React, { useState, useEffect } from 'react';
 import { StatusBar as RNStatusBar, StyleSheet, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -106,25 +106,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-/*
+*/
 
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import WebView from 'react-native-webview';
 
-export default function App() {
+const App = () => {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+      />
+      <SafeAreaView style={styles.container} edges={['left', 'right']}>
+        <WebView
+          source={{ uri: 'https://testing-ddy8.onrender.com/' }}
+          style={styles.webview}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={true}
+          scalesPageToFit={false}
+          scrollEnabled={true}
+          allowsBackForwardNavigationGestures={true}
+          mediaPlaybackRequiresUserAction={false}
+          allowsInlineMediaPlayback={true}
+          setSupportMultipleWindows={false}
+        />
+      </SafeAreaView>
+    </>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#000',
   },
-});*/
+  webview: {
+    flex: 1,
+  },
+});
+
+export default App;
