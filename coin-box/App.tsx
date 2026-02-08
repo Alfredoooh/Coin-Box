@@ -1,4 +1,4 @@
-/* App.tsx
+//App.tsx
 import React, { useState, useEffect } from 'react';
 import { StatusBar as RNStatusBar, StyleSheet, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-*/
+/*
 
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
@@ -127,4 +127,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+});*/
