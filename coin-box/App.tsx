@@ -107,18 +107,33 @@ const styles = StyleSheet.create({
   },
 });
 */
-
-import React from 'react';
-import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useRef } from 'react';
+import { StatusBar, StyleSheet, useColorScheme, BackHandler } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import WebView from 'react-native-webview';
 
 const App = () => {
+  const webViewRef = useRef(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  const handleBackPress = () => {
+    if (webViewRef.current) {
+      webViewRef.current.goBack();
+      return true;
+    }
+    return false;
+  };
+
+  React.useEffect(() => {
+    BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', handleBackPress);
+    };
+  }, []);
+
   return (
-    <>
+    <SafeAreaProvider>
       <StatusBar
         translucent
         backgroundColor="transparent"
@@ -126,6 +141,7 @@ const App = () => {
       />
       <SafeAreaView style={styles.container} edges={['left', 'right']}>
         <WebView
+          ref={webViewRef}
           source={{ uri: 'https://testing-ddy8.onrender.com/' }}
           style={styles.webview}
           javaScriptEnabled={true}
@@ -137,9 +153,12 @@ const App = () => {
           mediaPlaybackRequiresUserAction={false}
           allowsInlineMediaPlayback={true}
           setSupportMultipleWindows={false}
+          cacheEnabled={true}
+          originWhitelist={['*']}
+          mixedContentMode="always"
         />
       </SafeAreaView>
-    </>
+    </SafeAreaProvider>
   );
 };
 
@@ -150,6 +169,7 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+    backgroundColor: '#000',
   },
 });
 
