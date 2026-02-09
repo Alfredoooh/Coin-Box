@@ -1,70 +1,146 @@
 workflows:
-  expo-webview:
-    name: Expo WebView Otimizado
+  react-native-android-minimal-apk:
+    name: React Native Android APK Build
+    max_build_duration: 60
     environment:
+      vars:
+        WORKING_DIRECTORY: "coin-box"
       node: latest
+    cache:
+      cache_paths:
+        - $HOME/.gradle/caches
+        - $WORKING_DIRECTORY/node_modules
     scripts:
-      - name: Install
-        script: npm install
-        
-      - name: Prebuild
-        script: npx expo prebuild --platform android --clean
-        
-      - name: Otimizar build.gradle
+      - name: Install dependencies
         script: |
-          cat > android/app/build.gradle <<'EOF'
-          apply plugin: "com.android.application"
-          apply plugin: "org.jetbrains.kotlin.android"
-          apply plugin: "com.facebook.react"
+          cd "$WORKING_DIRECTORY"
+          npm install --no-audit --no-fund
 
-          react {
-              cliFile = new File(["node", "--print", "require.resolve('@expo/cli')"].execute(null, rootDir).text.trim())
-          }
+      - name: Expo prebuild (android)
+        script: |
+          cd "$WORKING_DIRECTORY"
+          rm -rf android
+          npx expo prebuild --platform android --clean
 
-          android {
-              namespace "com.nexa.cbox"
-              compileSdk 34
-              
-              defaultConfig {
-                  applicationId "com.nexa.cbox"
-                  minSdk 24
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0"
-              }
-              
-              buildTypes {
-                  release {
-                      minifyEnabled true
-                      shrinkResources true
-                      proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-                  }
-              }
-              
-              splits {
-                  abi {
-                      enable true
-                      reset()
-                      include 'arm64-v8a'
-                      universalApk false
-                  }
-              }
-              
-              packagingOptions {
-                  resources {
-                      excludes += ['META-INF/**', 'kotlin/**']
-                  }
-              }
-          }
-
-          dependencies {
-              implementation("com.facebook.react:react-android")
-              implementation("com.facebook.react:hermes-android")
-          }
-          EOF
+      - name: Modificar build.gradle para otimização
+        script: |
+          cd "$WORKING_DIRECTORY/android/app"
           
-      - name: Build APK
-        script: cd android && ./gradlew assembleRelease --no-daemon
-        
+          # Adicionar otimizações ao buildTypes
+          sed -i '' '/buildTypes {/a\
+          \        release {\
+          \            minifyEnabled true\
+          \            shrinkResources true\
+          \            crunchPngs true\
+          \            zipAlignEnabled true\
+          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
+          \        }
+          ' build.gradle || sed -i '/buildTypes {/a\
+          \        release {\
+          \            minifyEnabled true\
+          \            shrinkResources true\
+          \            crunchPngs true\
+          \            zipAlignEnabled true\
+          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
+          \        }
+          ' build.gradle
+          
+          # Adicionar splits
+          sed -i '' '/android {/a\
+          \    splits {\
+          \        abi {\
+          \            enable true\
+          \            reset()\
+          \            include "arm64-v8a"\
+          \            universalApk false\
+          \        }\
+          \    }
+          ' build.gradle || sed -i '/android {/a\
+          \    splits {\
+          \        abi {\
+          \            enable true\
+          \            reset()\
+          \            include "arm64-v8a"\
+          \            universalApk false\
+          \        }\
+          \    }
+          ' build.gradle
+
+      - name: Criar proguard-rules.pro otimizado
+        script: |
+          cd "$WORKING_DIRECTORY"
+          cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
+          -keepattributes *Annotation*
+          -keep class com.facebook.react.** { *; }
+          -keep class com.facebook.hermes.** { *; }
+          -keep class expo.modules.** { *; }
+          -keep class com.nexa.cbox.** { *; }
+          
+          -dontwarn com.facebook.**
+          -dontwarn okhttp3.**
+          -dontwarn okio.**
+          -dontwarn javax.annotation.**
+          
+          -assumenosideeffects class android.util.Log {
+              public static *** d(...);
+              public static *** v(...);
+              public static *** i(...);
+              public static *** w(...);
+          }
+          
+          -repackageclasses
+          -allowaccessmodification
+          -optimizationpasses 5
+          PROGUARDEOF
+
+      - name: Criar index.js
+        script: |
+          cd "$WORKING_DIRECTORY"
+          if [ ! -f "index.js" ]; then
+            cat > index.js <<'INDEXEOF'
+          import { registerRootComponent } from 'expo';
+          import App from './App';
+          registerRootComponent(App);
+          INDEXEOF
+          fi
+
+      - name: Build APK otimizado
+        script: |
+          cd "$WORKING_DIRECTORY/android"
+          chmod +x ./gradlew
+          ./gradlew clean
+          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --stacktrace 2>&1 | tee /tmp/build.log
+          
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "=== ERRO COMPLETO ==="
+            tail -200 /tmp/build.log
+            exit 1
+          fi
+
+      - name: Verificar tamanho e copiar APK
+        script: |
+          cd "$WORKING_DIRECTORY"
+          echo "==> APKs gerados:"
+          ls -lh android/app/build/outputs/apk/release/*.apk
+          
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Erro: Nenhum APK encontrado!"
+            exit 1
+          fi
+          
+          mkdir -p "$CM_BUILD_DIR"
+          cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
+          
+          echo "==> Tamanho final do APK:"
+          du -h "$CM_BUILD_DIR/app-release.apk"
+
     artifacts:
-      - android/app/build/outputs/apk/release/*.apk
+      - $CM_BUILD_DIR/*.apk
+    publishing:
+      email:
+        recipients:
+          - seu-email@example.com
+        notify:
+          success: true
+          failure: true
