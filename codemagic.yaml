@@ -25,26 +25,23 @@ workflows:
       - name: Criar proguard-rules.pro CORRETO para WebView
         script: |
           cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro << 'EOF'
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
--keep class expo.modules.** { *; }
--keep class com.nexa.cbox.** { *; }
--keep class com.reactnativecommunity.webview.** { *; }
--keep class android.webkit.** { *; }
--keep class com.th3rdwave.safeareacontext.** { *; }
--keep class com.swmansion.** { *; }
-
--dontwarn com.facebook.**
--dontwarn okhttp3.**
--dontwarn okio.**
-
--keepattributes *Annotation*
--keepattributes JavascriptInterface
-
--optimizationpasses 2
--dontpreverify
-EOF
+          cat > android/app/proguard-rules.pro <<'PROGUARD_END'
+          -keep class com.facebook.react.** { *; }
+          -keep class com.facebook.hermes.** { *; }
+          -keep class expo.modules.** { *; }
+          -keep class com.nexa.cbox.** { *; }
+          -keep class com.reactnativecommunity.webview.** { *; }
+          -keep class android.webkit.** { *; }
+          -keep class com.th3rdwave.safeareacontext.** { *; }
+          -keep class com.swmansion.** { *; }
+          -dontwarn com.facebook.**
+          -dontwarn okhttp3.**
+          -dontwarn okio.**
+          -keepattributes *Annotation*
+          -keepattributes JavascriptInterface
+          -optimizationpasses 2
+          -dontpreverify
+          PROGUARD_END
 
       - name: Modificar build.gradle para otimização SEGURA
         script: |
