@@ -110,26 +110,23 @@ const styles = StyleSheet.create({
 import React, { useRef } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, BackHandler } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import WebView from 'react-native-webview';
+import { WebView } from 'react-native-webview';
 
-const App = () => {
+export default function App() {
   const webViewRef = useRef(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const handleBackPress = () => {
-    if (webViewRef.current) {
-      webViewRef.current.goBack();
-      return true;
-    }
-    return false;
-  };
-
   React.useEffect(() => {
-    BackHandler.addEventListener('hardwareBackPress', handleBackPress);
-    return () => {
-      BackHandler.removeEventListener('hardwareBackPress', handleBackPress);
-    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (webViewRef.current) {
+        webViewRef.current.goBack();
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
   }, []);
 
   return (
@@ -160,7 +157,7 @@ const App = () => {
       </SafeAreaView>
     </SafeAreaProvider>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -172,5 +169,3 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
 });
-
-export default App;
