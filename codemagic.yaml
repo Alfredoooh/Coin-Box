@@ -22,89 +22,92 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Modificar build.gradle para otimização
-        script: |
-          cd "$WORKING_DIRECTORY/android/app"
-          
-          # Adicionar otimizações ao buildTypes
-          sed -i '' '/buildTypes {/a\
-          \        release {\
-          \            minifyEnabled true\
-          \            shrinkResources true\
-          \            crunchPngs true\
-          \            zipAlignEnabled true\
-          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
-          \        }
-          ' build.gradle || sed -i '/buildTypes {/a\
-          \        release {\
-          \            minifyEnabled true\
-          \            shrinkResources true\
-          \            crunchPngs true\
-          \            zipAlignEnabled true\
-          \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\
-          \        }
-          ' build.gradle
-          
-          # Adicionar splits
-          sed -i '' '/android {/a\
-          \    splits {\
-          \        abi {\
-          \            enable true\
-          \            reset()\
-          \            include "arm64-v8a"\
-          \            universalApk false\
-          \        }\
-          \    }
-          ' build.gradle || sed -i '/android {/a\
-          \    splits {\
-          \        abi {\
-          \            enable true\
-          \            reset()\
-          \            include "arm64-v8a"\
-          \            universalApk false\
-          \        }\
-          \    }
-          ' build.gradle
-
-      - name: Criar proguard-rules.pro otimizado
+      - name: Criar proguard-rules.pro CORRETO para WebView
         script: |
           cd "$WORKING_DIRECTORY"
           cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
-          -keepattributes *Annotation*
-          -keep class com.facebook.react.** { *; }
-          -keep class com.facebook.hermes.** { *; }
-          -keep class expo.modules.** { *; }
-          -keep class com.nexa.cbox.** { *; }
+# React Native e Hermes
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class com.facebook.jni.** { *; }
+-keep class com.facebook.soloader.** { *; }
+
+# Expo
+-keep class expo.modules.** { *; }
+-keep class com.nexa.cbox.** { *; }
+
+# WebView - CRÍTICO!
+-keep class com.reactnativecommunity.webview.** { *; }
+-keep class android.webkit.WebView { *; }
+-keep class android.webkit.WebSettings { *; }
+-keep class android.webkit.WebViewClient { *; }
+-keep class android.webkit.WebChromeClient { *; }
+-keep class android.webkit.JavascriptInterface { *; }
+
+# Safe Area Context
+-keep class com.th3rdwave.safeareacontext.** { *; }
+
+# Reanimated
+-keep class com.swmansion.reanimated.** { *; }
+-keep class com.swmansion.common.** { *; }
+
+# Gesture Handler  
+-keep class com.swmansion.gesturehandler.** { *; }
+
+# Não otimizar código crítico
+-dontwarn com.facebook.**
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-dontwarn javax.annotation.**
+-dontwarn com.reactnativecommunity.webview.**
+
+# Manter annotations
+-keepattributes *Annotation*
+-keepattributes JavascriptInterface
+-keepattributes InnerClasses
+-keepattributes Signature
+
+# Não remover logs - TEMPORÁRIO PARA DEBUG
+# -assumenosideeffects class android.util.Log {
+#     public static *** d(...);
+#     public static *** v(...);
+#     public static *** i(...);
+#     public static *** w(...);
+# }
+
+# Otimizações SEGURAS
+-optimizationpasses 3
+-dontpreverify
+PROGUARDEOF
+
+      - name: Modificar build.gradle para otimização SEGURA
+        script: |
+          cd "$WORKING_DIRECTORY/android/app"
           
-          -dontwarn com.facebook.**
-          -dontwarn okhttp3.**
-          -dontwarn okio.**
-          -dontwarn javax.annotation.**
+          # Backup
+          cp build.gradle build.gradle.backup
           
-          -assumenosideeffects class android.util.Log {
-              public static *** d(...);
-              public static *** v(...);
-              public static *** i(...);
-              public static *** w(...);
+          # Adicionar buildTypes com minify DESABILITADO temporariamente
+          sed -i.bak '/buildTypes {/,/}/ {
+            /release {/,/}/ {
+              s/minifyEnabled true/minifyEnabled false/
+              s/shrinkResources true/shrinkResources false/
+            }
+          }' build.gradle || true
+          
+          # Se não funcionou, força manualmente
+          cat build.gradle | grep -q "minifyEnabled false" || {
+            sed -i.bak '/release {/a\
+            \            minifyEnabled false\
+            \            shrinkResources false\
+            \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            ' build.gradle
           }
           
-          -repackageclasses
-          -allowaccessmodification
-          -optimizationpasses 5
-          PROGUARDEOF
+          echo "=== build.gradle release config ==="
+          grep -A 10 "release {" build.gradle
 
-      - name: Criar index.js
-        script: |
-          cd "$WORKING_DIRECTORY"
-          if [ ! -f "index.js" ]; then
-            cat > index.js <<'INDEXEOF'
-          import { registerRootComponent } from 'expo';
-          import App from './App';
-          registerRootComponent(App);
-          INDEXEOF
-          fi
-
-      - name: Build APK otimizado
+      - name: Build APK SEM minify (para testar)
         script: |
           cd "$WORKING_DIRECTORY/android"
           chmod +x ./gradlew
