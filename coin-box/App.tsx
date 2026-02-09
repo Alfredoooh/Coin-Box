@@ -1,4 +1,4 @@
-/*App.tsx
+// App.tsx
 import React, { useState, useEffect } from 'react';
 import { StatusBar as RNStatusBar, StyleSheet, View, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-*/
+/*
 import React, { useRef } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, BackHandler } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -169,3 +169,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
 });
+*/
