@@ -25,60 +25,26 @@ workflows:
       - name: Criar proguard-rules.pro CORRETO para WebView
         script: |
           cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro <<'PROGUARDEOF'
-# React Native e Hermes
+          cat > android/app/proguard-rules.pro << 'EOF'
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
--keep class com.facebook.jni.** { *; }
--keep class com.facebook.soloader.** { *; }
-
-# Expo
 -keep class expo.modules.** { *; }
 -keep class com.nexa.cbox.** { *; }
-
-# WebView - CRÍTICO!
 -keep class com.reactnativecommunity.webview.** { *; }
--keep class android.webkit.WebView { *; }
--keep class android.webkit.WebSettings { *; }
--keep class android.webkit.WebViewClient { *; }
--keep class android.webkit.WebChromeClient { *; }
--keep class android.webkit.JavascriptInterface { *; }
-
-# Safe Area Context
+-keep class android.webkit.** { *; }
 -keep class com.th3rdwave.safeareacontext.** { *; }
+-keep class com.swmansion.** { *; }
 
-# Reanimated
--keep class com.swmansion.reanimated.** { *; }
--keep class com.swmansion.common.** { *; }
-
-# Gesture Handler  
--keep class com.swmansion.gesturehandler.** { *; }
-
-# Não otimizar código crítico
 -dontwarn com.facebook.**
 -dontwarn okhttp3.**
 -dontwarn okio.**
--dontwarn javax.annotation.**
--dontwarn com.reactnativecommunity.webview.**
 
-# Manter annotations
 -keepattributes *Annotation*
 -keepattributes JavascriptInterface
--keepattributes InnerClasses
--keepattributes Signature
 
-# Não remover logs - TEMPORÁRIO PARA DEBUG
-# -assumenosideeffects class android.util.Log {
-#     public static *** d(...);
-#     public static *** v(...);
-#     public static *** i(...);
-#     public static *** w(...);
-# }
-
-# Otimizações SEGURAS
--optimizationpasses 3
+-optimizationpasses 2
 -dontpreverify
-PROGUARDEOF
+EOF
 
       - name: Modificar build.gradle para otimização SEGURA
         script: |
