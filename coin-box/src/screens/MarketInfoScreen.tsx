@@ -89,7 +89,7 @@ export default function MarketInfoScreen({ route, navigation }: MarketInfoScreen
         <View style={[styles.marketHeader, { backgroundColor: colors.cardBg }]}>
           {market.logo === 'candlestick' ? (
             <Image 
-              source={require('../../assets/candlestick.png')} 
+              source={require('../assets/candlestick.png')} 
               style={styles.marketLogo} 
               resizeMode="contain" 
             />
