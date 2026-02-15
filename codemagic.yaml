@@ -37,59 +37,60 @@ workflows:
           echo "android.useAndroidX=true" >> gradle.properties
           echo "reactNativeArchitectures=arm64-v8a" >> gradle.properties
           
-          # Desabilitar minify no build.gradle
+          # Configurar build.gradle do app para usar assinatura debug
           cd app
-          sed -i.bak 's/minifyEnabled true/minifyEnabled false/' build.gradle
-          sed -i.bak 's/shrinkResources true/shrinkResources false/' build.gradle
           
-          echo "=== Config aplicada ==="
-          grep -A 5 "minifyEnabled" build.gradle
+          # Adicionar signingConfig debug no release
+          cat > /tmp/fix_build.sh << 'FIXSCRIPT'
+          #!/bin/bash
+          
+          # Desabilitar minify
+          sed -i.bak 's/minifyEnabled true/minifyEnabled false/g' build.gradle
+          sed -i.bak 's/shrinkResources true/shrinkResources false/g' build.gradle
+          
+          # Adicionar signingConfig se não existir
+          if ! grep -q "signingConfig signingConfigs.debug" build.gradle; then
+            sed -i.bak '/release {/a\
+                signingConfig signingConfigs.debug
+          ' build.gradle
+          fi
+          
+          echo "✓ build.gradle configurado"
+          FIXSCRIPT
+          
+          chmod +x /tmp/fix_build.sh
+          /tmp/fix_build.sh
+          
+          echo "=== Release config ==="
+          grep -A 10 "release {" build.gradle
 
       - name: Build APK
         script: |
           set -e
-          set -x
           
           cd "$WORKING_DIRECTORY/android"
           
-          echo "=========================================="
-          echo "INICIANDO BUILD"
-          echo "=========================================="
-          pwd
+          echo "🚀 Iniciando build..."
           
-          echo ""
-          echo "=========================================="
-          echo "BUILDANDO APK RELEASE"
-          echo "=========================================="
+          # Build SEM verbose - só mostrar erros
           ./gradlew assembleRelease \
             --no-daemon \
-            --stacktrace \
-            --warning-mode all 2>&1 | tee /tmp/build.log
+            --quiet \
+            --warning-mode none 2>&1 | tee /tmp/build.log
           
           BUILD_EXIT=${PIPESTATUS[0]}
           
-          echo ""
-          echo "=========================================="
-          echo "BUILD EXIT CODE: $BUILD_EXIT"
-          echo "=========================================="
-          
           if [ $BUILD_EXIT -ne 0 ]; then
             echo ""
-            echo "❌❌❌ BUILD FALHOU ❌❌❌"
+            echo "❌ BUILD FALHOU!"
             echo ""
-            echo "=========================================="
-            echo "PROCURANDO ERRO:"
-            echo "=========================================="
-            grep -B5 -A5 "BUILD FAILED\|FAILURE\|Error:\|Exception" /tmp/build.log | tail -200
+            echo "=== ERRO ==="
+            cat /tmp/build.log
             echo ""
-            echo "=========================================="
-            echo "LOG COMPLETO EM /tmp/build.log"
-            echo "=========================================="
             exit 1
           fi
           
-          echo ""
-          echo "✅ BUILD CONCLUÍDO COM SUCESSO"
+          echo "✅ Build completo!"
 
       - name: Copy APK
         script: |
