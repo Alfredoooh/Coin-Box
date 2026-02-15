@@ -16,13 +16,53 @@ workflows:
       - name: Install dependencies
         script: |
           cd "$WORKING_DIRECTORY"
+          
+          # Limpar cache do npm
+          npm cache clean --force
+          
+          # Instalar dependências
           npm install
+          
+          # Instalar plugins Babel necessários
+          npm install --save-dev @babel/plugin-proposal-private-property-in-object
+          npm install --save-dev @babel/plugin-transform-private-property-in-object
+          
+          echo "✅ Dependências instaladas"
+
+      - name: Fix Babel config
+        script: |
+          cd "$WORKING_DIRECTORY"
+          
+          # Criar/atualizar babel.config.js com plugin necessário
+          cat > babel.config.js << 'BABELCONFIG'
+          module.exports = function(api) {
+            api.cache(true);
+            return {
+              presets: ['babel-preset-expo'],
+              plugins: [
+                ['@babel/plugin-proposal-private-property-in-object', { loose: true }],
+                ['@babel/plugin-transform-private-property-in-object', { loose: true }]
+              ]
+            };
+          };
+          BABELCONFIG
+          
+          echo "✅ Babel configurado"
 
       - name: Expo prebuild
         script: |
           cd "$WORKING_DIRECTORY"
+          
+          # Remover android existente
           rm -rf android
+          
+          # Limpar cache do Metro
+          npx expo start --clear
+          
+          # Prebuild
           npx expo prebuild --platform android --clean
+          
+          echo "✅ Prebuild completo"
 
       - name: Configure build
         script: |
@@ -37,10 +77,13 @@ workflows:
           echo "android.useAndroidX=true" >> gradle.properties
           echo "reactNativeArchitectures=arm64-v8a" >> gradle.properties
           
-          # Configurar build.gradle do app para usar assinatura debug
+          # Metro bundler config
+          echo "hermesEnabled=true" >> gradle.properties
+          
+          # Configurar build.gradle do app
           cd app
           
-          # Adicionar signingConfig debug no release
+          # Script para fix do build.gradle
           cat > /tmp/fix_build.sh << 'FIXSCRIPT'
           #!/bin/bash
           
@@ -62,7 +105,7 @@ workflows:
           /tmp/fix_build.sh
           
           echo "=== Release config ==="
-          grep -A 10 "release {" build.gradle
+          grep -A 10 "release {" build.gradle || echo "Não encontrado"
 
       - name: Build APK
         script: |
@@ -70,27 +113,44 @@ workflows:
           
           cd "$WORKING_DIRECTORY/android"
           
-          echo "🚀 Iniciando build..."
+          echo "🚀 Iniciando build do APK..."
           
-          # Build SEM verbose - só mostrar erros
-          ./gradlew assembleRelease \
+          # Limpar build anterior
+          ./gradlew clean --no-daemon --quiet
+          
+          # Build com melhor handling de erros
+          if ./gradlew assembleRelease \
             --no-daemon \
-            --quiet \
-            --warning-mode none 2>&1 | tee /tmp/build.log
-          
-          BUILD_EXIT=${PIPESTATUS[0]}
-          
-          if [ $BUILD_EXIT -ne 0 ]; then
+            --stacktrace \
+            --warning-mode all 2>&1 | tee /tmp/build.log; then
+            echo "✅ Build completo!"
+          else
             echo ""
             echo "❌ BUILD FALHOU!"
             echo ""
-            echo "=== ERRO ==="
-            cat /tmp/build.log
+            echo "=== ÚLTIMAS 100 LINHAS DO LOG ==="
+            tail -100 /tmp/build.log
+            echo ""
+            
+            # Verificar erros específicos
+            if grep -q "Execution failed for task" /tmp/build.log; then
+              echo "=== ERRO DE TASK GRADLE ==="
+              grep -A 20 "Execution failed for task" /tmp/build.log
+            fi
+            
+            if grep -q "FAILURE: Build failed" /tmp/build.log; then
+              echo "=== DETALHES DO ERRO ==="
+              grep -A 30 "FAILURE: Build failed" /tmp/build.log
+            fi
+            
+            if grep -q "Unable to load script" /tmp/build.log; then
+              echo "=== ERRO DE BUNDLE JS ==="
+              grep -B 5 -A 20 "Unable to load script" /tmp/build.log
+            fi
+            
             echo ""
             exit 1
           fi
-          
-          echo "✅ Build completo!"
 
       - name: Copy APK
         script: |
@@ -103,16 +163,21 @@ workflows:
           echo "PROCURANDO APK"
           echo "=========================================="
           
-          find android/app/build/outputs -name "*.apk" -type f
+          # Mostrar toda estrutura de outputs
+          find android/app/build/outputs -name "*.apk" -type f || echo "Nenhum APK encontrado"
           
+          # Tentar encontrar APK
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
           
           if [ -z "$APK_PATH" ]; then
             echo ""
             echo "❌ NENHUM APK ENCONTRADO!"
             echo ""
-            echo "Estrutura de build/outputs:"
+            echo "Estrutura completa de build/outputs:"
             ls -R android/app/build/outputs/ || echo "Diretório não existe"
+            echo ""
+            echo "Estrutura de android/app/build:"
+            ls -R android/app/build/ || echo "Diretório não existe"
             exit 1
           fi
           
@@ -120,19 +185,21 @@ workflows:
           echo "✅ APK encontrado: $APK_PATH"
           echo ""
           
+          # Criar diretório e copiar
           mkdir -p "$CM_BUILD_DIR"
           cp "$APK_PATH" "$CM_BUILD_DIR/coin-box.apk"
           
           echo "=========================================="
-          echo "APK COPIADO"
+          echo "APK COPIADO COM SUCESSO"
           echo "=========================================="
           ls -lh "$CM_BUILD_DIR/coin-box.apk"
           echo ""
           echo "Tamanho: $(du -h "$CM_BUILD_DIR/coin-box.apk" | cut -f1)"
+          echo ""
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
-      
+
     publishing:
       email:
         recipients:
