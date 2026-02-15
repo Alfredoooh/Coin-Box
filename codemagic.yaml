@@ -1,14 +1,11 @@
 workflows:
   android-build:
-    name: Android APK
+    name: Android Build
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
       vars:
         WORKING_DIRECTORY: "coin-box"
-        CI: "false"
-        EXPO_NO_METRO: "1"
-        EXPO_NO_TELEMETRY: "1"
       node: 20.11.0
       java: 17
     cache:
@@ -16,189 +13,50 @@ workflows:
         - $HOME/.gradle/caches
         - $WORKING_DIRECTORY/node_modules
     scripts:
-      - name: Install dependencies
+      - name: Install
         script: |
           cd "$WORKING_DIRECTORY"
-          
-          # Limpar cache do npm
-          npm cache clean --force
-          
-          # Instalar dependências
           npm install
-          
-          # Fix versão do Expo
-          npm install expo@~54.0.33 --save
-          
-          # Instalar plugins Babel necessários
-          npm install --save-dev @babel/plugin-proposal-private-property-in-object
-          npm install --save-dev @babel/plugin-transform-private-property-in-object
-          
-          echo "✅ Dependências instaladas"
 
-      - name: Fix Babel config
+      - name: Prebuild
         script: |
           cd "$WORKING_DIRECTORY"
-          
-          # Criar/atualizar babel.config.js com plugin necessário
-          cat > babel.config.js << 'BABELCONFIG'
-          module.exports = function(api) {
-            api.cache(true);
-            return {
-              presets: ['babel-preset-expo'],
-              plugins: [
-                ['@babel/plugin-proposal-private-property-in-object', { loose: true }],
-                ['@babel/plugin-transform-private-property-in-object', { loose: true }]
-              ]
-            };
-          };
-          BABELCONFIG
-          
-          echo "✅ Babel configurado"
-
-      - name: Expo prebuild
-        script: |
-          cd "$WORKING_DIRECTORY"
-          
-          # Remover android existente
           rm -rf android
-          rm -rf .expo
-          
-          # Limpar cache do Metro/Expo
-          rm -rf node_modules/.cache
-          
-          # Prebuild SEM Metro rodando
-          EXPO_NO_METRO=1 npx expo prebuild --platform android --clean --no-install
-          
-          echo "✅ Prebuild completo"
+          npx expo prebuild --platform android --clean
 
-      - name: Configure build
+      - name: Build
         script: |
-          cd "$WORKING_DIRECTORY/android"
+          cd "$WORKING_DIRECTORY"
           
-          # Configurar gradle.properties
-          echo "" >> gradle.properties
-          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> gradle.properties
-          echo "org.gradle.parallel=true" >> gradle.properties
-          echo "org.gradle.daemon=false" >> gradle.properties
-          echo "android.enableJetifier=true" >> gradle.properties
-          echo "android.useAndroidX=true" >> gradle.properties
-          echo "reactNativeArchitectures=arm64-v8a" >> gradle.properties
+          mkdir -p "$CM_BUILD_DIR"
+          cp codemagic.yaml "$CM_BUILD_DIR/codemagic.yaml.txt"
           
-          # Metro bundler config
-          echo "hermesEnabled=true" >> gradle.properties
+          cd android
+          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/build.log
           
-          # Configurar build.gradle do app
-          cd app
-          
-          # Script para fix do build.gradle
-          cat > /tmp/fix_build.sh << 'FIXSCRIPT'
-          #!/bin/bash
-          
-          # Desabilitar minify
-          sed -i.bak 's/minifyEnabled true/minifyEnabled false/g' build.gradle
-          sed -i.bak 's/shrinkResources true/shrinkResources false/g' build.gradle
-          
-          # Adicionar signingConfig se não existir
-          if ! grep -q "signingConfig signingConfigs.debug" build.gradle; then
-            sed -i.bak '/release {/a\
-                signingConfig signingConfigs.debug
-          ' build.gradle
-          fi
-          
-          echo "✓ build.gradle configurado"
-          FIXSCRIPT
-          
-          chmod +x /tmp/fix_build.sh
-          /tmp/fix_build.sh
-          
-          echo "=== Release config ==="
-          grep -A 10 "release {" build.gradle || echo "Não encontrado"
-
-      - name: Build APK
-        script: |
-          set -e
-          
-          cd "$WORKING_DIRECTORY/android"
-          
-          echo "🚀 Iniciando build do APK..."
-          
-          # Limpar build anterior
-          ./gradlew clean --no-daemon
-          
-          # Build com output visível
-          echo "Building release APK..."
-          
-          if ./gradlew assembleRelease \
-            --no-daemon \
-            --stacktrace 2>&1 | tee /tmp/build.log; then
-            echo ""
-            echo "✅ Build completo!"
-            echo ""
-          else
-            echo ""
-            echo "❌ BUILD FALHOU!"
-            echo ""
-            echo "=== EXIBINDO ERROS RELEVANTES ==="
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "BUILD FAILED"
             
-            # Mostrar apenas linhas com erro/falha
-            grep -i "error\|fail\|exception" /tmp/build.log | tail -50 || echo "Nenhum erro específico encontrado"
-            
-            echo ""
-            echo "=== ÚLTIMAS 80 LINHAS DO LOG ==="
-            tail -80 /tmp/build.log
-            echo ""
+            grep -B5 -A5 "FAILURE\|Error:" /tmp/build.log | head -40 > "$CM_BUILD_DIR/error.txt"
+            cp "$WORKING_DIRECTORY/babel.config.js" "$CM_BUILD_DIR/babel.txt"
+            cp "$WORKING_DIRECTORY/android/app/build.gradle" "$CM_BUILD_DIR/build-gradle.txt"
+            cp "$WORKING_DIRECTORY/package.json" "$CM_BUILD_DIR/package.txt"
             
             exit 1
           fi
 
       - name: Copy APK
         script: |
-          set -e
-          set -x
-          
           cd "$WORKING_DIRECTORY"
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
           
-          echo "=========================================="
-          echo "PROCURANDO APK"
-          echo "=========================================="
-          
-          # Mostrar toda estrutura de outputs
-          find android/app/build/outputs -name "*.apk" -type f || echo "Nenhum APK encontrado"
-          
-          # Tentar encontrar APK
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-          
-          if [ -z "$APK_PATH" ]; then
-            echo ""
-            echo "❌ NENHUM APK ENCONTRADO!"
-            echo ""
-            echo "Estrutura completa de build/outputs:"
-            ls -R android/app/build/outputs/ || echo "Diretório não existe"
-            echo ""
-            echo "Estrutura de android/app/build:"
-            ls -R android/app/build/ || echo "Diretório não existe"
-            exit 1
+          if [ -n "$APK" ]; then
+            cp "$APK" "$CM_BUILD_DIR/coin-box.apk"
           fi
-          
-          echo ""
-          echo "✅ APK encontrado: $APK_PATH"
-          echo ""
-          
-          # Criar diretório e copiar
-          mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/coin-box.apk"
-          
-          echo "=========================================="
-          echo "APK COPIADO COM SUCESSO"
-          echo "=========================================="
-          ls -lh "$CM_BUILD_DIR/coin-box.apk"
-          echo ""
-          echo "Tamanho: $(du -h "$CM_BUILD_DIR/coin-box.apk" | cut -f1)"
-          echo ""
 
     artifacts:
-      - $CM_BUILD_DIR/*.apk
-
+      - $CM_BUILD_DIR/*
+      
     publishing:
       email:
         recipients:
