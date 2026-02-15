@@ -1,6 +1,6 @@
 workflows:
-  react-native-android-minimal-apk:
-    name: React Native Android APK Build
+  android-build:
+    name: Android APK
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -16,163 +16,46 @@ workflows:
       - name: Install dependencies
         script: |
           cd "$WORKING_DIRECTORY"
-          npm install --no-audit --no-fund
+          npm install
 
-      - name: Expo prebuild (android)
+      - name: Expo prebuild
         script: |
           cd "$WORKING_DIRECTORY"
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Configurar ProGuard
+      - name: Configure build
         script: |
-          cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro <<'EOF'
-          # React Native
-          -keep class com.facebook.react.** { *; }
-          -keep class com.facebook.hermes.** { *; }
+          cd "$WORKING_DIRECTORY/android"
           
-          # Expo
-          -keep class expo.modules.** { *; }
+          # Configurar gradle.properties
+          echo "" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" >> gradle.properties
+          echo "org.gradle.parallel=true" >> gradle.properties
+          echo "org.gradle.daemon=false" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "reactNativeArchitectures=arm64-v8a" >> gradle.properties
           
-          # App
-          -keep class com.nexa.cbox.** { *; }
+          # Desabilitar minify no build.gradle
+          cd app
+          sed -i.bak 's/minifyEnabled true/minifyEnabled false/' build.gradle
+          sed -i.bak 's/shrinkResources true/shrinkResources false/' build.gradle
           
-          # WebView
-          -keep class com.reactnativecommunity.webview.** { *; }
-          -keep class android.webkit.** { *; }
-          -keepattributes JavascriptInterface
-          
-          # React Native Reanimated
-          -keep class com.swmansion.reanimated.** { *; }
-          -keep class com.th3rdwave.safeareacontext.** { *; }
-          
-          # Warnings
-          -dontwarn com.facebook.**
-          -dontwarn okhttp3.**
-          -dontwarn okio.**
-          
-          # Otimizações básicas
-          -keepattributes *Annotation*
-          -optimizationpasses 2
-          -dontpreverify
-          EOF
-
-      - name: Patch build.gradle
-        script: |
-          cd "$WORKING_DIRECTORY/android/app"
-          
-          # Criar script Python separado
-          cat > /tmp/patch_gradle.py << 'PYTHON_SCRIPT'
-          import re
-          
-          with open('build.gradle', 'r') as f:
-              content = f.read()
-          
-          # Adicionar configuração de ABIs (só arm64-v8a)
-          if 'abiFilters' not in content:
-              # Procurar defaultConfig
-              default_config_match = re.search(r'(defaultConfig\s*\{)', content)
-              if default_config_match:
-                  insert_pos = default_config_match.end()
-                  ndk_config = '\n        ndk {\n            abiFilters "arm64-v8a"\n        }\n'
-                  content = content[:insert_pos] + ndk_config + content[insert_pos:]
-          
-          # Substituir buildTypes
-          pattern = r'(buildTypes\s*\{[^}]*release\s*\{)(.*?)(\})'
-          
-          def replace_release(match):
-              release_block = match.group(2)
-              release_block = re.sub(r'minifyEnabled\s+(true|false)', '', release_block)
-              release_block = re.sub(r'shrinkResources\s+(true|false)', '', release_block)
-              
-              new_config = '\n            minifyEnabled false\n            shrinkResources false\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\n        '
-              return match.group(1) + new_config + release_block + match.group(3)
-          
-          content = re.sub(pattern, replace_release, content, flags=re.DOTALL)
-          
-          with open('build.gradle', 'w') as f:
-              f.write(content)
-          
-          print("build.gradle atualizado com sucesso")
-          PYTHON_SCRIPT
-          
-          # Executar script
-          python3 /tmp/patch_gradle.py
-          
-          echo "=== Release config ==="
-          grep -A 10 "release {" build.gradle
+          echo "=== Config aplicada ==="
+          grep -A 5 "minifyEnabled" build.gradle
 
       - name: Build APK
         script: |
           cd "$WORKING_DIRECTORY/android"
-          
-          # Configurar gradle.properties para performance
-          cat >> gradle.properties << 'GRADLE_PROPS'
-          
-          # Performance
-          org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError
-          org.gradle.parallel=true
-          org.gradle.daemon=false
-          org.gradle.configureondemand=true
-          android.enableJetifier=true
-          android.useAndroidX=true
-          
-          # Build apenas arm64-v8a
-          reactNativeArchitectures=arm64-v8a
-          GRADLE_PROPS
-          
-          # Limpar builds anteriores
-          ./gradlew clean --no-daemon
-          
-          # Build SIMPLIFICADO - só info quando necessário
-          ./gradlew assembleRelease \
-            --no-daemon \
-            --stacktrace \
-            -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g" \
-            2>&1 | tee /tmp/gradle-build.log
-          
-          BUILD_STATUS=${PIPESTATUS[0]}
-          
-          if [ $BUILD_STATUS -ne 0 ]; then
-            echo ""
-            echo "════════════════════════════════════════════"
-            echo "❌ BUILD FALHOU"
-            echo "════════════════════════════════════════════"
-            echo ""
-            echo "🔍 ERROS ENCONTRADOS:"
-            grep -i "error\|exception\|failed\|FAILURE" /tmp/gradle-build.log | tail -100
-            echo ""
-            echo "📋 ÚLTIMAS 200 LINHAS:"
-            tail -200 /tmp/gradle-build.log
-            exit 1
-          fi
-          
-          echo "✓ Build concluído com sucesso!"
+          ./gradlew clean assembleRelease --stacktrace --no-daemon
 
-      - name: Verificar e copiar APK
+      - name: Copy APK
         script: |
           cd "$WORKING_DIRECTORY"
-          
-          echo "=== Procurando APKs ==="
-          find android/app/build/outputs -name "*.apk" -type f
-          
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-          
-          if [ -z "$APK_PATH" ]; then
-            echo "❌ ERRO: Nenhum APK encontrado!"
-            echo "Estrutura de diretórios:"
-            ls -R android/app/build/outputs/
-            exit 1
-          fi
-          
           mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/coin-box.apk"
-          
-          echo ""
-          echo "✓ APK copiado com sucesso!"
-          echo "Tamanho: $(du -h "$CM_BUILD_DIR/coin-box.apk" | cut -f1)"
-          echo "Path: $APK_PATH"
+          cp android/app/build/outputs/apk/release/*.apk "$CM_BUILD_DIR/coin-box.apk"
+          ls -lh "$CM_BUILD_DIR/coin-box.apk"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
