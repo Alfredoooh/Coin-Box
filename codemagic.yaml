@@ -56,7 +56,7 @@ workflows:
 
     artifacts:
       - $CM_BUILD_DIR/*
-      
+
     publishing:
       email:
         recipients:
