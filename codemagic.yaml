@@ -62,42 +62,31 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY/android/app"
           
-          # Criar novo build.gradle com Python
-          python3 << 'PYTHON_EOF'
+          # Criar script Python separado
+          cat > /tmp/patch_gradle.py << 'PYTHON_SCRIPT'
           import re
           
           with open('build.gradle', 'r') as f:
               content = f.read()
           
-          # Adicionar configuração de ABIs para build mais rápido (só arm64-v8a para teste)
-          if 'ndk {' not in content:
-              android_block = re.search(r'(android\s*\{)', content)
-              if android_block:
-                  insert_pos = android_block.end()
-                  ndk_config = '''
-      defaultConfig {
-          ndk {
-              abiFilters "arm64-v8a"
-          }
-      }
-  '''
+          # Adicionar configuração de ABIs (só arm64-v8a)
+          if 'abiFilters' not in content:
+              # Procurar defaultConfig
+              default_config_match = re.search(r'(defaultConfig\s*\{)', content)
+              if default_config_match:
+                  insert_pos = default_config_match.end()
+                  ndk_config = '\n        ndk {\n            abiFilters "arm64-v8a"\n        }\n'
                   content = content[:insert_pos] + ndk_config + content[insert_pos:]
           
-          # Encontrar e substituir buildTypes
+          # Substituir buildTypes
           pattern = r'(buildTypes\s*\{[^}]*release\s*\{)(.*?)(\})'
           
           def replace_release(match):
               release_block = match.group(2)
-              # Remover minifyEnabled e shrinkResources existentes
               release_block = re.sub(r'minifyEnabled\s+(true|false)', '', release_block)
               release_block = re.sub(r'shrinkResources\s+(true|false)', '', release_block)
               
-              # Adicionar configurações corretas
-              new_config = '''
-              minifyEnabled false
-              shrinkResources false
-              proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-          '''
+              new_config = '\n            minifyEnabled false\n            shrinkResources false\n            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"\n        '
               return match.group(1) + new_config + release_block + match.group(3)
           
           content = re.sub(pattern, replace_release, content, flags=re.DOTALL)
@@ -105,11 +94,14 @@ workflows:
           with open('build.gradle', 'w') as f:
               f.write(content)
           
-          print("✓ build.gradle atualizado")
-          PYTHON_EOF
+          print("build.gradle atualizado com sucesso")
+          PYTHON_SCRIPT
           
-          echo "=== Verificando configuração ==="
-          grep -A 15 "release {" build.gradle
+          # Executar script
+          python3 /tmp/patch_gradle.py
+          
+          echo "=== Release config ==="
+          grep -A 10 "release {" build.gradle
 
       - name: Build APK
         script: |
