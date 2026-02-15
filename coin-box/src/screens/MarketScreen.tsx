@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+const TELEGRAM_BLUE = '#0088CC';
+const TELEGRAM_BLUE_DARK = '#1C3F5A';
+
 interface MarketData {
   symbol: string;
   display_name: string;
@@ -130,7 +133,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     negative: '#FF5252',
     neutral: isDarkMode ? '#7C7D80' : '#9E9E9E',
     cardBg: isDarkMode ? '#1C1D1F' : '#FFFFFF',
-    categoryActiveBg: isDarkMode ? '#E4E6EB' : '#050505',
+    categoryActiveBg: isDarkMode ? '#E4E6EB' : TELEGRAM_BLUE,
     categoryActiveText: isDarkMode ? '#050505' : '#FFFFFF',
     categoryInactiveBg: isDarkMode ? '#2A2B2D' : '#F0F2F5',
     categoryInactiveText: isDarkMode ? '#E4E6EB' : '#050505',
@@ -396,7 +399,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           <View style={[styles.logoContainer, { backgroundColor: colors.surface }]}>
             {item.logo === 'candlestick' ? (
               <Image
-                source={require('../../assets/candlestick.png')}
+                source={require('../assets/candlestick.png')}
                 style={styles.candlestickIcon}
                 resizeMode="contain"
               />
@@ -511,13 +514,13 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   if (loading || error) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchBar, { backgroundColor: colors.searchBg }]}>
-            <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
+        <View style={[styles.searchContainer, { backgroundColor: TELEGRAM_BLUE }]}>
+          <View style={[styles.searchBar, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+            <MaterialCommunityIcons name="magnify" size={20} color="#FFFFFF" />
             <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
+              style={[styles.searchInput, { color: '#FFFFFF' }]}
               placeholder="Pesquisar mercado..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="rgba(255,255,255,0.7)"
               value={searchQuery}
               onChangeText={setSearchQuery}
               editable={false}
@@ -567,19 +570,19 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.searchContainer}>
-        <View style={[styles.searchBar, { backgroundColor: colors.searchBg }]}>
-          <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
+      <View style={[styles.searchContainer, { backgroundColor: TELEGRAM_BLUE }]}>
+        <View style={[styles.searchBar, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+          <MaterialCommunityIcons name="magnify" size={20} color="#FFFFFF" />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={[styles.searchInput, { color: '#FFFFFF' }]}
             placeholder="Pesquisar mercado..."
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.7)"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery !== '' && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={colors.textSecondary} />
+              <MaterialCommunityIcons name="close-circle" size={18} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
           )}
         </View>
