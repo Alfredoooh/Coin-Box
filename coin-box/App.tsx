@@ -6,14 +6,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { enableScreens } from 'react-native-screens';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import HomeScreen from './src/screens/HomeScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import MarketScreen from './src/screens/MarketScreen';
-import MarketDetailScreen from './src/screens/MarketDetailScreen';
-import MarketInfoScreen from './src/screens/MarketInfoScreen';
-import { COLORS } from './src/styles/theme';
-import { screenOptions } from './src/navigation/navigationConfig';
-import { BalanceProvider } from './src/contexts/BalanceContext';
+import HomeScreen from './screens/HomeScreen';
+import SettingsScreen from './screens/SettingsScreen';
+import MarketScreen from './screens/MarketScreen';
+import MarketDetailScreen from './screens/MarketDetailScreen';
+import MarketInfoScreen from './screens/MarketInfoScreen';
+import { COLORS } from './styles/theme';
+import { screenOptions } from './navigation/navigationConfig';
+import { BalanceProvider } from './contexts/BalanceContext';
 
 enableScreens();
 
@@ -62,7 +62,7 @@ export default function App() {
                   />
                 )}
               </Stack.Screen>
-              
+
               <Stack.Screen name="Settings">
                 {(props) => (
                   <SettingsScreen
