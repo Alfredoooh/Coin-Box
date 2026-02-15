@@ -56,19 +56,6 @@ workflows:
           echo "INICIANDO BUILD"
           echo "=========================================="
           pwd
-          ls -la
-          
-          echo ""
-          echo "=========================================="
-          echo "GRADLE WRAPPER INFO"
-          echo "=========================================="
-          ./gradlew --version
-          
-          echo ""
-          echo "=========================================="
-          echo "LIMPANDO BUILD ANTERIOR"
-          echo "=========================================="
-          ./gradlew clean --no-daemon --stacktrace 2>&1 | tee /tmp/clean.log
           
           echo ""
           echo "=========================================="
@@ -77,10 +64,9 @@ workflows:
           ./gradlew assembleRelease \
             --no-daemon \
             --stacktrace \
-            --warning-mode all \
-            --info 2>&1 | tee /tmp/build.log
+            --warning-mode all 2>&1 | tee /tmp/build.log
           
-          BUILD_EXIT=$?
+          BUILD_EXIT=${PIPESTATUS[0]}
           
           echo ""
           echo "=========================================="
@@ -92,14 +78,13 @@ workflows:
             echo "❌❌❌ BUILD FALHOU ❌❌❌"
             echo ""
             echo "=========================================="
-            echo "ERROS DO GRADLE:"
+            echo "PROCURANDO ERRO:"
             echo "=========================================="
-            grep -i "FAILED\|ERROR\|FAILURE\|Exception" /tmp/build.log | head -100
+            grep -B5 -A5 "BUILD FAILED\|FAILURE\|Error:\|Exception" /tmp/build.log | tail -200
             echo ""
             echo "=========================================="
-            echo "ÚLTIMAS 500 LINHAS DO LOG:"
+            echo "LOG COMPLETO EM /tmp/build.log"
             echo "=========================================="
-            tail -500 /tmp/build.log
             exit 1
           fi
           
