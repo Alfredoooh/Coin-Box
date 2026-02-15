@@ -19,6 +19,11 @@ workflows:
           npm install
           npm install --save-dev babel-preset-expo
 
+      - name: Fix Gradle Wrapper
+        script: |
+          cd "$WORKING_DIRECTORY/android/gradle/wrapper"
+          sed -i '' 's/gradle-8.14.3/gradle-8.10.2/g' gradle-wrapper.properties
+
       - name: Prebuild
         script: |
           cd "$WORKING_DIRECTORY"
