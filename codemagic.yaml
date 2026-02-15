@@ -62,12 +62,26 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY/android/app"
           
-          # Criar novo build.gradle com Python (mais confiável que sed)
+          # Criar novo build.gradle com Python
           python3 << 'PYTHON_EOF'
           import re
           
           with open('build.gradle', 'r') as f:
               content = f.read()
+          
+          # Adicionar configuração de ABIs para build mais rápido (só arm64-v8a para teste)
+          if 'ndk {' not in content:
+              android_block = re.search(r'(android\s*\{)', content)
+              if android_block:
+                  insert_pos = android_block.end()
+                  ndk_config = '''
+      defaultConfig {
+          ndk {
+              abiFilters "arm64-v8a"
+          }
+      }
+  '''
+                  content = content[:insert_pos] + ndk_config + content[insert_pos:]
           
           # Encontrar e substituir buildTypes
           pattern = r'(buildTypes\s*\{[^}]*release\s*\{)(.*?)(\})'
@@ -101,17 +115,29 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY/android"
           
+          # Configurar gradle.properties para performance
+          cat >> gradle.properties << 'GRADLE_PROPS'
+          
+          # Performance
+          org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError
+          org.gradle.parallel=true
+          org.gradle.daemon=false
+          org.gradle.configureondemand=true
+          android.enableJetifier=true
+          android.useAndroidX=true
+          
+          # Build apenas arm64-v8a
+          reactNativeArchitectures=arm64-v8a
+          GRADLE_PROPS
+          
           # Limpar builds anteriores
           ./gradlew clean --no-daemon
           
-          # Build com logs detalhados
+          # Build SIMPLIFICADO - só info quando necessário
           ./gradlew assembleRelease \
             --no-daemon \
             --stacktrace \
-            --info \
-            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=512m" \
-            -Dorg.gradle.parallel=true \
-            -Dorg.gradle.daemon=false \
+            -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g" \
             2>&1 | tee /tmp/gradle-build.log
           
           BUILD_STATUS=${PIPESTATUS[0]}
@@ -119,16 +145,18 @@ workflows:
           if [ $BUILD_STATUS -ne 0 ]; then
             echo ""
             echo "════════════════════════════════════════════"
-            echo "❌ BUILD FALHOU - ÚLTIMAS 300 LINHAS DO LOG:"
+            echo "❌ BUILD FALHOU"
             echo "════════════════════════════════════════════"
-            tail -300 /tmp/gradle-build.log
             echo ""
-            echo "════════════════════════════════════════════"
-            echo "🔍 PROCURANDO ERRO ESPECÍFICO:"
-            echo "════════════════════════════════════════════"
-            grep -i "error\|exception\|failed" /tmp/gradle-build.log | tail -50
+            echo "🔍 ERROS ENCONTRADOS:"
+            grep -i "error\|exception\|failed\|FAILURE" /tmp/gradle-build.log | tail -100
+            echo ""
+            echo "📋 ÚLTIMAS 200 LINHAS:"
+            tail -200 /tmp/gradle-build.log
             exit 1
           fi
+          
+          echo "✓ Build concluído com sucesso!"
 
       - name: Verificar e copiar APK
         script: |
