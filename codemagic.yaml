@@ -47,15 +47,102 @@ workflows:
 
       - name: Build APK
         script: |
+          set -e
+          set -x
+          
           cd "$WORKING_DIRECTORY/android"
-          ./gradlew clean assembleRelease --stacktrace --no-daemon
+          
+          echo "=========================================="
+          echo "INICIANDO BUILD"
+          echo "=========================================="
+          pwd
+          ls -la
+          
+          echo ""
+          echo "=========================================="
+          echo "GRADLE WRAPPER INFO"
+          echo "=========================================="
+          ./gradlew --version
+          
+          echo ""
+          echo "=========================================="
+          echo "LIMPANDO BUILD ANTERIOR"
+          echo "=========================================="
+          ./gradlew clean --no-daemon --stacktrace 2>&1 | tee /tmp/clean.log
+          
+          echo ""
+          echo "=========================================="
+          echo "BUILDANDO APK RELEASE"
+          echo "=========================================="
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            --warning-mode all \
+            --info 2>&1 | tee /tmp/build.log
+          
+          BUILD_EXIT=$?
+          
+          echo ""
+          echo "=========================================="
+          echo "BUILD EXIT CODE: $BUILD_EXIT"
+          echo "=========================================="
+          
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo ""
+            echo "❌❌❌ BUILD FALHOU ❌❌❌"
+            echo ""
+            echo "=========================================="
+            echo "ERROS DO GRADLE:"
+            echo "=========================================="
+            grep -i "FAILED\|ERROR\|FAILURE\|Exception" /tmp/build.log | head -100
+            echo ""
+            echo "=========================================="
+            echo "ÚLTIMAS 500 LINHAS DO LOG:"
+            echo "=========================================="
+            tail -500 /tmp/build.log
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ BUILD CONCLUÍDO COM SUCESSO"
 
       - name: Copy APK
         script: |
+          set -e
+          set -x
+          
           cd "$WORKING_DIRECTORY"
+          
+          echo "=========================================="
+          echo "PROCURANDO APK"
+          echo "=========================================="
+          
+          find android/app/build/outputs -name "*.apk" -type f
+          
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          
+          if [ -z "$APK_PATH" ]; then
+            echo ""
+            echo "❌ NENHUM APK ENCONTRADO!"
+            echo ""
+            echo "Estrutura de build/outputs:"
+            ls -R android/app/build/outputs/ || echo "Diretório não existe"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ APK encontrado: $APK_PATH"
+          echo ""
+          
           mkdir -p "$CM_BUILD_DIR"
-          cp android/app/build/outputs/apk/release/*.apk "$CM_BUILD_DIR/coin-box.apk"
+          cp "$APK_PATH" "$CM_BUILD_DIR/coin-box.apk"
+          
+          echo "=========================================="
+          echo "APK COPIADO"
+          echo "=========================================="
           ls -lh "$CM_BUILD_DIR/coin-box.apk"
+          echo ""
+          echo "Tamanho: $(du -h "$CM_BUILD_DIR/coin-box.apk" | cut -f1)"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
