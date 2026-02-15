@@ -158,7 +158,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
     setStake(savedStake);
     setDuration(savedDuration);
     setDurationUnit(savedDurationUnit);
-    
+
     setModalActive(true);
     RNStatusBar.setBarStyle('light-content', true);
     setShowTradeModal(true);
@@ -691,7 +691,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
         const contractId = buyResponse.buy.contract_id;
         const entryPrice = currentPrice ?? market.price;
         const entryTime = Math.floor(Date.now() / 1000);
-        
+
         // Adicionar linha de trade no gráfico com dados completos
         webviewRef.current?.injectJavaScript(`
           window.addTradeLine({
@@ -704,15 +704,15 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
           });
           true;
         `);
-        
+
         Alert.alert('✅ Trade Executado', `Contrato ${contractId} aberto! Você pode abrir outra posição.`);
-        
+
         // Armazenar stake do trade
         setActiveTradesStake(prev => ({ ...prev, [contractId]: stakeValue }));
-        
+
         // NÃO fechar o modal - permitir múltiplas posições
         // closeTradeModal();
-        
+
         // Monitorar o contrato e remover a linha quando concluir
         const contractSub = derivService.subscribe('proposal_open_contract', (data) => {
           if (data.proposal_open_contract?.contract_id === contractId) {
@@ -735,7 +735,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
             }
           }
         });
-        
+
         derivService.send({
           proposal_open_contract: 1,
           contract_id: contractId,
@@ -754,7 +754,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
   const handleQuickTrade = useCallback(async (type: 'CALL' | 'PUT') => {
     const stakeValue = parseFloat(stake) || 1.0;
     const durationValue = parseInt(duration) || 5;
-    
+
     try {
       // Fazer proposta
       let proposalResponse: any = null;
@@ -801,7 +801,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
         const contractId = buyResponse.buy.contract_id;
         const entryPrice = currentPrice ?? market.price;
         const entryTime = Math.floor(Date.now() / 1000);
-        
+
         webviewRef.current?.injectJavaScript(`
           window.addTradeLine({
             tradeId: '${contractId}',
@@ -813,9 +813,9 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
           });
           true;
         `);
-        
+
         setActiveTradesStake(prev => ({ ...prev, [contractId]: stakeValue }));
-        
+
         const contractSub = derivService.subscribe('proposal_open_contract', (data) => {
           if (data.proposal_open_contract?.contract_id === contractId) {
             if (data.proposal_open_contract.is_sold || data.proposal_open_contract.status === 'sold') {
@@ -837,7 +837,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
             }
           }
         });
-        
+
         derivService.send({
           proposal_open_contract: 1,
           contract_id: contractId,
@@ -956,10 +956,10 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
                   const displayTime = data.unit === 't' 
                     ? `${Math.ceil(data.remaining / 2)}t`
                     : `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                  
+
                   const tradeColor = data.tradeType === 'CALL' ? '#00D95F' : '#FF5252';
                   const stakeAmount = activeTradesStake[tradeId] || 0;
-                  
+
                   return (
                     <View 
                       key={tradeId}
@@ -992,7 +992,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
                 })}
               </ScrollView>
             )}
-            
+
             <TouchableOpacity style={styles.buyButton} onPress={() => handleQuickTrade('CALL')}>
               <Text style={styles.buyButtonText}>Rise</Text>
             </TouchableOpacity>
@@ -1064,7 +1064,7 @@ export default function MarketDetailScreen({ route, navigation }: MarketDetailSc
                   </TouchableOpacity>
                 </View>
               </View>
-              
+
               <View style={{ marginBottom: 12 }}>
                 <Text style={{ fontSize: 14, fontWeight: '600', marginBottom: 8, color: colors.textSecondary }}>Valor</Text>
                 <TextInput
