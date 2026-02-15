@@ -2,10 +2,12 @@ workflows:
   react-native-android-minimal-apk:
     name: React Native Android APK Build
     max_build_duration: 60
+    instance_type: mac_mini_m2
     environment:
       vars:
         WORKING_DIRECTORY: "coin-box"
-      node: latest
+      node: 20.11.0
+      java: 17
     cache:
       cache_paths:
         - $HOME/.gradle/caches
@@ -22,91 +24,143 @@ workflows:
           rm -rf android
           npx expo prebuild --platform android --clean
 
-      - name: Criar proguard-rules.pro CORRETO para WebView
+      - name: Configurar ProGuard
         script: |
           cd "$WORKING_DIRECTORY"
-          cat > android/app/proguard-rules.pro <<'PROGUARD_END'
+          cat > android/app/proguard-rules.pro <<'EOF'
+          # React Native
           -keep class com.facebook.react.** { *; }
           -keep class com.facebook.hermes.** { *; }
+          
+          # Expo
           -keep class expo.modules.** { *; }
+          
+          # App
           -keep class com.nexa.cbox.** { *; }
+          
+          # WebView
           -keep class com.reactnativecommunity.webview.** { *; }
           -keep class android.webkit.** { *; }
+          -keepattributes JavascriptInterface
+          
+          # React Native Reanimated
+          -keep class com.swmansion.reanimated.** { *; }
           -keep class com.th3rdwave.safeareacontext.** { *; }
-          -keep class com.swmansion.** { *; }
+          
+          # Warnings
           -dontwarn com.facebook.**
           -dontwarn okhttp3.**
           -dontwarn okio.**
+          
+          # Otimizações básicas
           -keepattributes *Annotation*
-          -keepattributes JavascriptInterface
           -optimizationpasses 2
           -dontpreverify
-          PROGUARD_END
+          EOF
 
-      - name: Modificar build.gradle para otimização SEGURA
+      - name: Patch build.gradle
         script: |
           cd "$WORKING_DIRECTORY/android/app"
           
-          # Backup
-          cp build.gradle build.gradle.backup
+          # Criar novo build.gradle com Python (mais confiável que sed)
+          python3 << 'PYTHON_EOF'
+          import re
           
-          # Adicionar buildTypes com minify DESABILITADO temporariamente
-          sed -i.bak '/buildTypes {/,/}/ {
-            /release {/,/}/ {
-              s/minifyEnabled true/minifyEnabled false/
-              s/shrinkResources true/shrinkResources false/
-            }
-          }' build.gradle || true
+          with open('build.gradle', 'r') as f:
+              content = f.read()
           
-          # Se não funcionou, força manualmente
-          cat build.gradle | grep -q "minifyEnabled false" || {
-            sed -i.bak '/release {/a\
-            \            minifyEnabled false\
-            \            shrinkResources false\
-            \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-            ' build.gradle
-          }
+          # Encontrar e substituir buildTypes
+          pattern = r'(buildTypes\s*\{[^}]*release\s*\{)(.*?)(\})'
           
-          echo "=== build.gradle release config ==="
-          grep -A 10 "release {" build.gradle
+          def replace_release(match):
+              release_block = match.group(2)
+              # Remover minifyEnabled e shrinkResources existentes
+              release_block = re.sub(r'minifyEnabled\s+(true|false)', '', release_block)
+              release_block = re.sub(r'shrinkResources\s+(true|false)', '', release_block)
+              
+              # Adicionar configurações corretas
+              new_config = '''
+              minifyEnabled false
+              shrinkResources false
+              proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+          '''
+              return match.group(1) + new_config + release_block + match.group(3)
+          
+          content = re.sub(pattern, replace_release, content, flags=re.DOTALL)
+          
+          with open('build.gradle', 'w') as f:
+              f.write(content)
+          
+          print("✓ build.gradle atualizado")
+          PYTHON_EOF
+          
+          echo "=== Verificando configuração ==="
+          grep -A 15 "release {" build.gradle
 
-      - name: Build APK SEM minify (para testar)
+      - name: Build APK
         script: |
           cd "$WORKING_DIRECTORY/android"
-          chmod +x ./gradlew
-          ./gradlew clean
-          ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m" --stacktrace 2>&1 | tee /tmp/build.log
           
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "=== ERRO COMPLETO ==="
-            tail -200 /tmp/build.log
+          # Limpar builds anteriores
+          ./gradlew clean --no-daemon
+          
+          # Build com logs detalhados
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --stacktrace \
+            --info \
+            -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=512m" \
+            -Dorg.gradle.parallel=true \
+            -Dorg.gradle.daemon=false \
+            2>&1 | tee /tmp/gradle-build.log
+          
+          BUILD_STATUS=${PIPESTATUS[0]}
+          
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo ""
+            echo "════════════════════════════════════════════"
+            echo "❌ BUILD FALHOU - ÚLTIMAS 300 LINHAS DO LOG:"
+            echo "════════════════════════════════════════════"
+            tail -300 /tmp/gradle-build.log
+            echo ""
+            echo "════════════════════════════════════════════"
+            echo "🔍 PROCURANDO ERRO ESPECÍFICO:"
+            echo "════════════════════════════════════════════"
+            grep -i "error\|exception\|failed" /tmp/gradle-build.log | tail -50
             exit 1
           fi
 
-      - name: Verificar tamanho e copiar APK
+      - name: Verificar e copiar APK
         script: |
           cd "$WORKING_DIRECTORY"
-          echo "==> APKs gerados:"
-          ls -lh android/app/build/outputs/apk/release/*.apk
+          
+          echo "=== Procurando APKs ==="
+          find android/app/build/outputs -name "*.apk" -type f
           
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          
           if [ -z "$APK_PATH" ]; then
-            echo "Erro: Nenhum APK encontrado!"
+            echo "❌ ERRO: Nenhum APK encontrado!"
+            echo "Estrutura de diretórios:"
+            ls -R android/app/build/outputs/
             exit 1
           fi
           
           mkdir -p "$CM_BUILD_DIR"
-          cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
+          cp "$APK_PATH" "$CM_BUILD_DIR/coin-box.apk"
           
-          echo "==> Tamanho final do APK:"
-          du -h "$CM_BUILD_DIR/app-release.apk"
+          echo ""
+          echo "✓ APK copiado com sucesso!"
+          echo "Tamanho: $(du -h "$CM_BUILD_DIR/coin-box.apk" | cut -f1)"
+          echo "Path: $APK_PATH"
 
     artifacts:
       - $CM_BUILD_DIR/*.apk
+      
     publishing:
       email:
         recipients:
-          - seu-email@example.com
+          - alfredoooh.x3@gmail.com
         notify:
           success: true
           failure: true
