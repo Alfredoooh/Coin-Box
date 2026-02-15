@@ -6,6 +6,9 @@ workflows:
     environment:
       vars:
         WORKING_DIRECTORY: "coin-box"
+        CI: "false"
+        EXPO_NO_METRO: "1"
+        EXPO_NO_TELEMETRY: "1"
       node: 20.11.0
       java: 17
     cache:
@@ -22,6 +25,9 @@ workflows:
           
           # Instalar dependências
           npm install
+          
+          # Fix versão do Expo
+          npm install expo@~54.0.33 --save
           
           # Instalar plugins Babel necessários
           npm install --save-dev @babel/plugin-proposal-private-property-in-object
@@ -55,12 +61,13 @@ workflows:
           
           # Remover android existente
           rm -rf android
+          rm -rf .expo
           
-          # Limpar cache do Metro
-          npx expo start --clear
+          # Limpar cache do Metro/Expo
+          rm -rf node_modules/.cache
           
-          # Prebuild
-          npx expo prebuild --platform android --clean
+          # Prebuild SEM Metro rodando
+          EXPO_NO_METRO=1 npx expo prebuild --platform android --clean --no-install
           
           echo "✅ Prebuild completo"
 
@@ -116,39 +123,31 @@ workflows:
           echo "🚀 Iniciando build do APK..."
           
           # Limpar build anterior
-          ./gradlew clean --no-daemon --quiet
+          ./gradlew clean --no-daemon
           
-          # Build com melhor handling de erros
+          # Build com output visível
+          echo "Building release APK..."
+          
           if ./gradlew assembleRelease \
             --no-daemon \
-            --stacktrace \
-            --warning-mode all 2>&1 | tee /tmp/build.log; then
+            --stacktrace 2>&1 | tee /tmp/build.log; then
+            echo ""
             echo "✅ Build completo!"
+            echo ""
           else
             echo ""
             echo "❌ BUILD FALHOU!"
             echo ""
-            echo "=== ÚLTIMAS 100 LINHAS DO LOG ==="
-            tail -100 /tmp/build.log
-            echo ""
+            echo "=== EXIBINDO ERROS RELEVANTES ==="
             
-            # Verificar erros específicos
-            if grep -q "Execution failed for task" /tmp/build.log; then
-              echo "=== ERRO DE TASK GRADLE ==="
-              grep -A 20 "Execution failed for task" /tmp/build.log
-            fi
-            
-            if grep -q "FAILURE: Build failed" /tmp/build.log; then
-              echo "=== DETALHES DO ERRO ==="
-              grep -A 30 "FAILURE: Build failed" /tmp/build.log
-            fi
-            
-            if grep -q "Unable to load script" /tmp/build.log; then
-              echo "=== ERRO DE BUNDLE JS ==="
-              grep -B 5 -A 20 "Unable to load script" /tmp/build.log
-            fi
+            # Mostrar apenas linhas com erro/falha
+            grep -i "error\|fail\|exception" /tmp/build.log | tail -50 || echo "Nenhum erro específico encontrado"
             
             echo ""
+            echo "=== ÚLTIMAS 80 LINHAS DO LOG ==="
+            tail -80 /tmp/build.log
+            echo ""
+            
             exit 1
           fi
 
