@@ -17,6 +17,7 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           npm install
+          npm install --save-dev babel-preset-expo
 
       - name: Prebuild
         script: |
@@ -29,7 +30,7 @@ workflows:
           cd "$WORKING_DIRECTORY"
           
           mkdir -p "$CM_BUILD_DIR"
-          cp codemagic.yaml "$CM_BUILD_DIR/codemagic.yaml.txt"
+          cp codemagic.yaml "$CM_BUILD_DIR/codemagic.yaml.txt" 2>/dev/null || true
           
           cd android
           ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/build.log
@@ -38,9 +39,9 @@ workflows:
             echo "BUILD FAILED"
             
             grep -B5 -A5 "FAILURE\|Error:" /tmp/build.log | head -40 > "$CM_BUILD_DIR/error.txt"
-            cp "$WORKING_DIRECTORY/babel.config.js" "$CM_BUILD_DIR/babel.txt"
-            cp "$WORKING_DIRECTORY/android/app/build.gradle" "$CM_BUILD_DIR/build-gradle.txt"
-            cp "$WORKING_DIRECTORY/package.json" "$CM_BUILD_DIR/package.txt"
+            cp "$WORKING_DIRECTORY/babel.config.js" "$CM_BUILD_DIR/babel.txt" 2>/dev/null || true
+            cp "$WORKING_DIRECTORY/android/app/build.gradle" "$CM_BUILD_DIR/build-gradle.txt" 2>/dev/null || true
+            cp "$WORKING_DIRECTORY/package.json" "$CM_BUILD_DIR/package.txt" 2>/dev/null || true
             
             exit 1
           fi
