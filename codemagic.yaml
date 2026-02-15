@@ -22,6 +22,13 @@ workflows:
         script: |
           cd "$WORKING_DIRECTORY"
           rm -rf android
+          
+          # Remover nativewind do babel.config.js (não está instalado)
+          if [ -f "babel.config.js" ]; then
+            sed -i.bak '/nativewind/d' babel.config.js
+            echo "✓ Removido nativewind do babel.config.js"
+          fi
+          
           npx expo prebuild --platform android --clean
 
       - name: Configure build
