@@ -1,4 +1,4 @@
-<p>workflows:
+workflows:
   react-native-android:
     name: Coin Box - Android Build
     max_build_duration: 120
@@ -42,4 +42,4 @@
           - seu-email@exemplo.com
         notify:
           success: true
-          failure: true</p>
+          failure: true
