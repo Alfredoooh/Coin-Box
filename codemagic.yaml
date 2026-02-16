@@ -25,7 +25,7 @@ workflows:
 
       - name: Copy build.gradle
         script: |
-          cp "$CM_BUILD_DIR/coin-box/build.gradle" "$CM_BUILD_DIR/coin-box/android/app/build.gradle"
+          cp "$CM_BUILD_DIR/coin-box/android/app/build.gradle.orig" "$CM_BUILD_DIR/coin-box/android/app/build.gradle"
 
       - name: Build Android APK
         script: |
