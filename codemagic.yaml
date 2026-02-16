@@ -1,35 +1,137 @@
-workflows:
+<p>workflows:
   react-native-android:
-    name: Coin Box - Android Build
+    name: Coin Box - Android Build Optimized
     max_build_duration: 120
     instance_type: mac_mini_m2
+
     environment:
       vars:
         PACKAGE_NAME: "com.nexa.cbox"
         NODE_VERSION: "20"
+        WORKING_DIRECTORY: "$CM_BUILD_DIR/coin-box"
+
     scripts:
       - name: Set Android SDK location
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/coin-box/android/local.properties"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$WORKING_DIRECTORY/android/local.properties"
+
       - name: Install npm dependencies
         script: |
-          cd coin-box
+          cd $WORKING_DIRECTORY
           npm install
+
       - name: Run Expo Prebuild
         script: |
-          cd coin-box
+          cd $WORKING_DIRECTORY
           npx expo prebuild --clean --platform android
-      - name: Build Android APK
+
+      - name: Substituir build.gradle
         script: |
-          cd coin-box/android
-          ./gradlew assembleDebug
+          cd $WORKING_DIRECTORY
+          cat > android/app/build.gradle << 'EOFGRADLE'
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+
+react {
+    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    enableBundleCompression = true
+    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+    bundleCommand = "export:embed"
+    autolinkLibrariesWithApp()
+}
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.nexa.cbox"
+
+    defaultConfig {
+        applicationId "com.nexa.cbox"
+        minSdk 24
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            crunchPngs true
+            zipAlignEnabled true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
+        exclude 'META-INF/**'
+        exclude '**/*.kotlin_module'
+        pickFirst 'lib/*/libc++_shared.so'
+    }
+}
+
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}
+EOFGRADLE
+
+      - name: Criar proguard-rules.pro
+        script: |
+          cd $WORKING_DIRECTORY
+          cat > android/app/proguard-rules.pro << 'EOF'
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+-keep class expo.modules.** { *; }
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+}
+-dontwarn com.facebook.react.**
+-dontwarn okhttp3.**
+EOF
+
+      - name: Build APK otimizado
+        script: |
+          cd $WORKING_DIRECTORY/android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Verificar tamanho do APK
+        script: |
+          cd $WORKING_DIRECTORY
+          ls -lh android/app/build/outputs/apk/release/*.apk
+          du -h android/app/build/outputs/apk/release/*.apk
+
     artifacts:
       - coin-box/android/app/build/outputs/**/*.apk
-      - coin-box/android/app/build/outputs/**/*.aab
+
     publishing:
       email:
         recipients:
           - seu-email@exemplo.com
         notify:
           success: true
-          failure: true
+          failure: true</p>
