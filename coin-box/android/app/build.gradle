@@ -1,5 +1,3 @@
-         # SUBSTITUIR build.gradle COMPLETO
-          cat > build.gradle << 'EOFGRADLE'
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -22,7 +20,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
     namespace "com.nexa.cbox"
-    
+
     defaultConfig {
         applicationId "com.nexa.cbox"
         minSdk 24
@@ -33,7 +31,7 @@ android {
             abiFilters "arm64-v8a"
         }
     }
-    
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -42,18 +40,16 @@ android {
             keyPassword 'android'
         }
     }
-    
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug
             minifyEnabled true
             shrinkResources true
-            crunchPngs true
-            zipAlignEnabled true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
-    
+
     packagingOptions {
         jniLibs {
             useLegacyPackaging false
@@ -68,33 +64,3 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.facebook.react:hermes-android")
 }
-EOFGRADLE
-      
-      - name: Criar proguard-rules.pro
-        script: |
-          cd $WORKING_DIRECTORY
-          cat > android/app/proguard-rules.pro << 'EOF'
--keep class com.facebook.react.** { *; }
--keep class com.facebook.hermes.** { *; }
--keep class expo.modules.** { *; }
--assumenosideeffects class android.util.Log {
-    public static *** d(...);
-    public static *** v(...);
-}
--dontwarn com.facebook.react.**
--dontwarn okhttp3.**
-EOF
-      
-      - name: Build APK otimizado
-        script: |
-          cd $WORKING_DIRECTORY/android
-          ./gradlew assembleRelease --no-daemon
-      
-      - name: Verificar tamanho
-        script: |
-          cd $WORKING_DIRECTORY
-          ls -lh android/app/build/outputs/apk/release/*.apk
-          du -h android/app/build/outputs/apk/release/*.apk
-    
-    artifacts:
-      - coin-box/android/app/build/outputs/**/*.apk
