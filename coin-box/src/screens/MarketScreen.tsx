@@ -1,4 +1,4 @@
-// screens/MarketScreen.tsx
+// src/screens/MarketScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
@@ -9,12 +9,10 @@ import {
   Image,
   Animated,
   TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const TELEGRAM_BLUE = '#0088CC';
-const TELEGRAM_BLUE_DARK = '#1C3F5A';
 
 interface MarketData {
   symbol: string;
@@ -37,7 +35,7 @@ const MarketSkeleton = ({ isDarkMode, index, total }: { isDarkMode: boolean; ind
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(shimmerAnimation, {
           toValue: 1,
@@ -50,8 +48,10 @@ const MarketSkeleton = ({ isDarkMode, index, total }: { isDarkMode: boolean; ind
           useNativeDriver: true,
         }),
       ])
-    ).start();
-  }, []);
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmerAnimation]);
 
   const opacity = shimmerAnimation.interpolate({
     inputRange: [0, 1],
@@ -63,9 +63,9 @@ const MarketSkeleton = ({ isDarkMode, index, total }: { isDarkMode: boolean; ind
   const isLast = index === total - 1;
 
   return (
-    <View 
+    <View
       style={[
-        styles.marketItem, 
+        styles.marketItem,
         { backgroundColor: isDarkMode ? '#1C1D1F' : '#FFFFFF' },
         isFirst && styles.firstCard,
         isLast && styles.lastCard,
@@ -120,7 +120,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   const [searchQuery, setSearchQuery] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
   const priceHistoryRef = useRef<Map<string, number>>(new Map());
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectingRef = useRef(false);
 
   const colors = {
@@ -152,6 +152,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
         } catch (e) {}
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connectWebSocket = () => {
@@ -180,15 +181,15 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
 
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
           handleWebSocketMessage(data);
         } catch (e) {
           console.error('Erro ao processar mensagem:', e);
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('Erro WebSocket:', error);
+      ws.onerror = (errorEvent: any) => {
+        console.error('Erro WebSocket:', errorEvent);
         isConnectingRef.current = false;
         setError(true);
       };
@@ -240,14 +241,17 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   };
 
   const handleWebSocketMessage = (data: any) => {
-    if (data.msg_type === 'active_symbols') {
-      processActiveSymbols(data.active_symbols);
-    } else if (data.msg_type === 'tick') {
-      updateTickData(data.tick);
+    if (!data) return;
+    if (data.msg_type === 'active_symbols' || data.active_symbols) {
+      // Deriv may send a top-level active_symbols array or a message with msg_type
+      processActiveSymbols(data.active_symbols || data);
+    } else if (data.msg_type === 'tick' || data.tick) {
+      updateTickData(data.tick || data);
     }
   };
 
-  const getAbbreviation = (symbol: string, displayName: string): string => {
+  const getAbbreviation = (symbol: string, _displayName: string): string => {
+    if (!symbol) return '';
     if (symbol.includes('BOOM')) {
       const match = symbol.match(/\d+/);
       return match ? `B${match[0]}` : 'BOOM';
@@ -275,7 +279,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     if (symbol.includes('LTC')) return 'LTC';
     if (symbol.includes('XRP')) return 'XRP';
 
-    return symbol.substring(0, 3);
+    return symbol.substring(0, 3).toUpperCase();
   };
 
   const getMarketCategory = (symbol: string, market: string, submarket: string) => {
@@ -299,25 +303,26 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     const markets: MarketData[] = [];
     const tickSymbols: string[] = [];
 
-    symbols.forEach(symbol => {
-      if (!symbol.is_trading_suspended && symbol.exchange_is_open) {
-        const category = getMarketCategory(symbol.symbol, symbol.market, symbol.submarket);
+    symbols.forEach((symbolObj: any) => {
+      if (!symbolObj) return;
+      if (!symbolObj.is_trading_suspended && symbolObj.exchange_is_open) {
+        const category = getMarketCategory(symbolObj.symbol, symbolObj.market, symbolObj.submarket);
 
         if (category) {
           const marketData: MarketData = {
-            symbol: symbol.symbol,
-            display_name: symbol.display_name,
+            symbol: symbolObj.symbol,
+            display_name: symbolObj.display_name || symbolObj.symbol,
             price: 0,
             previous_price: 0,
             change: 0,
             change_percentage: 0,
-            logo: getMarketLogo(symbol.symbol),
+            logo: getMarketLogo(symbolObj.symbol),
             category: category,
-            abbreviation: getAbbreviation(symbol.symbol, symbol.display_name),
+            abbreviation: getAbbreviation(symbolObj.symbol, symbolObj.display_name || ''),
           };
 
           markets.push(marketData);
-          tickSymbols.push(symbol.symbol);
+          tickSymbols.push(symbolObj.symbol);
         }
       }
     });
@@ -327,6 +332,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     setError(false);
 
     if (tickSymbols.length > 0) {
+      // subscribe to a limited amount to avoid overloading
       subscribeToTicks(tickSymbols.slice(0, 100));
     }
   };
@@ -340,8 +346,8 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           const previousPrice = priceHistoryRef.current.get(tick.symbol) || tick.quote;
           const currentPrice = tick.quote;
           const change = currentPrice - previousPrice;
-          const changePercentage = previousPrice !== 0 
-            ? ((change / previousPrice) * 100) 
+          const changePercentage = previousPrice !== 0
+            ? ((change / previousPrice) * 100)
             : 0;
 
           priceHistoryRef.current.set(tick.symbol, currentPrice);
@@ -360,6 +366,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   };
 
   const getMarketLogo = (symbol: string) => {
+    if (!symbol) return 'candlestick';
     if (symbol.includes('BTC')) return 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
     if (symbol.includes('ETH')) return 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
     if (symbol.includes('LTC')) return 'https://cryptologos.cc/logos/litecoin-ltc-logo.png';
@@ -398,8 +405,9 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
         <View style={styles.marketItemLeft}>
           <View style={[styles.logoContainer, { backgroundColor: colors.surface }]}>
             {item.logo === 'candlestick' ? (
+              // corrected relative path: file is src/screens -> asset at src/assets
               <Image
-                source={require('../../assets/candlestick.png')}
+                source={require('../assets/candlestick.png')}
                 style={styles.candlestickIcon}
                 resizeMode="contain"
               />
@@ -431,11 +439,11 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
             {hasPrice ? item.price.toFixed(item.symbol.includes('BTC') ? 2 : 4) : '---'}
           </Text>
           <Text style={[styles.changePercentage, { color: changeColor }]}>
-            {hasPrice && item.change_percentage !== 0 
+            {hasPrice && item.change_percentage !== 0
               ? `${isPositive ? '+' : ''}${item.change_percentage.toFixed(2)}%`
               : hasPrice
-              ? '0.00%'
-              : '---'
+                ? '0.00%'
+                : '---'
             }
           </Text>
         </View>
@@ -452,7 +460,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
 
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(market => 
+      filtered = filtered.filter(market =>
         market.display_name.toLowerCase().includes(query) ||
         market.symbol.toLowerCase().includes(query) ||
         market.abbreviation.toLowerCase().includes(query)
@@ -488,11 +496,12 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
+        style={{ marginRight: 8 }}
       >
         <Animated.View
           style={[
             styles.categoryButton,
-            { 
+            {
               backgroundColor: isSelected ? colors.categoryActiveBg : colors.categoryInactiveBg,
               transform: [{ scale: scaleAnim }],
             }
@@ -546,7 +555,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           <View style={styles.errorContainer}>
             <MaterialCommunityIcons name="alert-circle" size={64} color={colors.textSecondary} />
             <Text style={[styles.errorText, { color: colors.text }]}>Erro ao carregar mercados</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.retryButton, { backgroundColor: colors.categoryActiveBg }]}
               onPress={connectWebSocket}
             >
@@ -641,12 +650,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 100,
-    gap: 10,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
     fontWeight: '400',
+    marginLeft: 10,
   },
   categoriesContainer: {
     maxHeight: 50,
@@ -656,7 +665,8 @@ const styles = StyleSheet.create({
   categoriesContent: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   categoryButton: {
     paddingHorizontal: 16,
