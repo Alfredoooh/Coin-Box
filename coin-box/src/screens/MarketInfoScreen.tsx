@@ -71,7 +71,7 @@ export default function MarketInfoScreen({ route, navigation }: MarketInfoScreen
         >
           <MaterialCommunityIcons name="arrow-left" size={24} color={accentColor} />
         </TouchableOpacity>
-        
+
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           Informações
         </Text>
@@ -89,7 +89,7 @@ export default function MarketInfoScreen({ route, navigation }: MarketInfoScreen
         <View style={[styles.marketHeader, { backgroundColor: colors.cardBg }]}>
           {market.logo === 'candlestick' ? (
             <Image 
-              source={require('../assets/candlestick.png')} 
+              source={require('../../assets/candlestick.png')} 
               style={styles.marketLogo} 
               resizeMode="contain" 
             />
@@ -120,7 +120,7 @@ export default function MarketInfoScreen({ route, navigation }: MarketInfoScreen
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
             PREÇO
           </Text>
-          
+
           <View style={[styles.infoCard, { backgroundColor: colors.cardBg }]}>
             <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>
               Preço Atual
