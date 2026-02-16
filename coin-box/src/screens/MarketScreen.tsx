@@ -1,4 +1,4 @@
-// src/screens/MarketScreen.tsx
+// screens/MarketScreen.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
@@ -9,10 +9,12 @@ import {
   Image,
   Animated,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const TELEGRAM_BLUE = '#0088CC';
+const TELEGRAM_BLUE_DARK = '#1C3F5A';
 
 interface MarketData {
   symbol: string;
@@ -35,7 +37,7 @@ const MarketSkeleton = ({ isDarkMode, index, total }: { isDarkMode: boolean; ind
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loop = Animated.loop(
+    Animated.loop(
       Animated.sequence([
         Animated.timing(shimmerAnimation, {
           toValue: 1,
@@ -48,10 +50,8 @@ const MarketSkeleton = ({ isDarkMode, index, total }: { isDarkMode: boolean; ind
           useNativeDriver: true,
         }),
       ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [shimmerAnimation]);
+    ).start();
+  }, []);
 
   const opacity = shimmerAnimation.interpolate({
     inputRange: [0, 1],
@@ -63,9 +63,9 @@ const MarketSkeleton = ({ isDarkMode, index, total }: { isDarkMode: boolean; ind
   const isLast = index === total - 1;
 
   return (
-    <View
+    <View 
       style={[
-        styles.marketItem,
+        styles.marketItem, 
         { backgroundColor: isDarkMode ? '#1C1D1F' : '#FFFFFF' },
         isFirst && styles.firstCard,
         isLast && styles.lastCard,
@@ -120,7 +120,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   const [searchQuery, setSearchQuery] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
   const priceHistoryRef = useRef<Map<string, number>>(new Map());
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectingRef = useRef(false);
 
   const colors = {
@@ -152,12 +152,11 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
         } catch (e) {}
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connectWebSocket = () => {
     if (isConnectingRef.current) return;
-
+    
     isConnectingRef.current = true;
     setError(false);
 
@@ -181,15 +180,15 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
 
       ws.onmessage = (event) => {
         try {
-          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          const data = JSON.parse(event.data);
           handleWebSocketMessage(data);
         } catch (e) {
           console.error('Erro ao processar mensagem:', e);
         }
       };
 
-      ws.onerror = (errorEvent: any) => {
-        console.error('Erro WebSocket:', errorEvent);
+      ws.onerror = (error) => {
+        console.error('Erro WebSocket:', error);
         isConnectingRef.current = false;
         setError(true);
       };
@@ -197,7 +196,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
       ws.onclose = () => {
         console.log('WebSocket fechado');
         isConnectingRef.current = false;
-
+        
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('Tentando reconectar...');
           connectWebSocket();
@@ -241,17 +240,14 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   };
 
   const handleWebSocketMessage = (data: any) => {
-    if (!data) return;
-    if (data.msg_type === 'active_symbols' || data.active_symbols) {
-      // Deriv may send a top-level active_symbols array or a message with msg_type
-      processActiveSymbols(data.active_symbols || data);
-    } else if (data.msg_type === 'tick' || data.tick) {
-      updateTickData(data.tick || data);
+    if (data.msg_type === 'active_symbols') {
+      processActiveSymbols(data.active_symbols);
+    } else if (data.msg_type === 'tick') {
+      updateTickData(data.tick);
     }
   };
 
-  const getAbbreviation = (symbol: string, _displayName: string): string => {
-    if (!symbol) return '';
+  const getAbbreviation = (symbol: string, displayName: string): string => {
     if (symbol.includes('BOOM')) {
       const match = symbol.match(/\d+/);
       return match ? `B${match[0]}` : 'BOOM';
@@ -278,8 +274,8 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     if (symbol.includes('ETH')) return 'ETH';
     if (symbol.includes('LTC')) return 'LTC';
     if (symbol.includes('XRP')) return 'XRP';
-
-    return symbol.substring(0, 3).toUpperCase();
+    
+    return symbol.substring(0, 3);
   };
 
   const getMarketCategory = (symbol: string, market: string, submarket: string) => {
@@ -303,26 +299,25 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     const markets: MarketData[] = [];
     const tickSymbols: string[] = [];
 
-    symbols.forEach((symbolObj: any) => {
-      if (!symbolObj) return;
-      if (!symbolObj.is_trading_suspended && symbolObj.exchange_is_open) {
-        const category = getMarketCategory(symbolObj.symbol, symbolObj.market, symbolObj.submarket);
-
+    symbols.forEach(symbol => {
+      if (!symbol.is_trading_suspended && symbol.exchange_is_open) {
+        const category = getMarketCategory(symbol.symbol, symbol.market, symbol.submarket);
+        
         if (category) {
           const marketData: MarketData = {
-            symbol: symbolObj.symbol,
-            display_name: symbolObj.display_name || symbolObj.symbol,
+            symbol: symbol.symbol,
+            display_name: symbol.display_name,
             price: 0,
             previous_price: 0,
             change: 0,
             change_percentage: 0,
-            logo: getMarketLogo(symbolObj.symbol),
+            logo: getMarketLogo(symbol.symbol),
             category: category,
-            abbreviation: getAbbreviation(symbolObj.symbol, symbolObj.display_name || ''),
+            abbreviation: getAbbreviation(symbol.symbol, symbol.display_name),
           };
 
           markets.push(marketData);
-          tickSymbols.push(symbolObj.symbol);
+          tickSymbols.push(symbol.symbol);
         }
       }
     });
@@ -330,9 +325,8 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     setAllMarkets(markets);
     setLoading(false);
     setError(false);
-
+    
     if (tickSymbols.length > 0) {
-      // subscribe to a limited amount to avoid overloading
       subscribeToTicks(tickSymbols.slice(0, 100));
     }
   };
@@ -346,8 +340,8 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           const previousPrice = priceHistoryRef.current.get(tick.symbol) || tick.quote;
           const currentPrice = tick.quote;
           const change = currentPrice - previousPrice;
-          const changePercentage = previousPrice !== 0
-            ? ((change / previousPrice) * 100)
+          const changePercentage = previousPrice !== 0 
+            ? ((change / previousPrice) * 100) 
             : 0;
 
           priceHistoryRef.current.set(tick.symbol, currentPrice);
@@ -366,12 +360,11 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   };
 
   const getMarketLogo = (symbol: string) => {
-    if (!symbol) return 'candlestick';
     if (symbol.includes('BTC')) return 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
     if (symbol.includes('ETH')) return 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
     if (symbol.includes('LTC')) return 'https://cryptologos.cc/logos/litecoin-ltc-logo.png';
     if (symbol.includes('XRP')) return 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
-
+    
     return 'candlestick';
   };
 
@@ -382,7 +375,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   const renderMarketItem = (item: MarketData, index: number, arrayLength: number) => {
     const isPositive = item.change > 0;
     const isNegative = item.change < 0;
-
+    
     const changeColor = isPositive ? colors.positive : isNegative ? colors.negative : colors.neutral;
     const hasPrice = item.price > 0;
 
@@ -405,9 +398,8 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
         <View style={styles.marketItemLeft}>
           <View style={[styles.logoContainer, { backgroundColor: colors.surface }]}>
             {item.logo === 'candlestick' ? (
-              // corrected relative path: file is src/screens -> asset at src/assets
               <Image
-                source={require('../assets/candlestick.png')}
+                source={require('../../assets/candlestick.png')}
                 style={styles.candlestickIcon}
                 resizeMode="contain"
               />
@@ -439,11 +431,11 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
             {hasPrice ? item.price.toFixed(item.symbol.includes('BTC') ? 2 : 4) : '---'}
           </Text>
           <Text style={[styles.changePercentage, { color: changeColor }]}>
-            {hasPrice && item.change_percentage !== 0
+            {hasPrice && item.change_percentage !== 0 
               ? `${isPositive ? '+' : ''}${item.change_percentage.toFixed(2)}%`
               : hasPrice
-                ? '0.00%'
-                : '---'
+              ? '0.00%'
+              : '---'
             }
           </Text>
         </View>
@@ -460,7 +452,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
 
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(market =>
+      filtered = filtered.filter(market => 
         market.display_name.toLowerCase().includes(query) ||
         market.symbol.toLowerCase().includes(query) ||
         market.abbreviation.toLowerCase().includes(query)
@@ -496,12 +488,11 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
-        style={{ marginRight: 8 }}
       >
         <Animated.View
           style={[
             styles.categoryButton,
-            {
+            { 
               backgroundColor: isSelected ? colors.categoryActiveBg : colors.categoryInactiveBg,
               transform: [{ scale: scaleAnim }],
             }
@@ -555,7 +546,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           <View style={styles.errorContainer}>
             <MaterialCommunityIcons name="alert-circle" size={64} color={colors.textSecondary} />
             <Text style={[styles.errorText, { color: colors.text }]}>Erro ao carregar mercados</Text>
-            <TouchableOpacity
+            <TouchableOpacity 
               style={[styles.retryButton, { backgroundColor: colors.categoryActiveBg }]}
               onPress={connectWebSocket}
             >
@@ -650,12 +641,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 100,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
     fontWeight: '400',
-    marginLeft: 10,
   },
   categoriesContainer: {
     maxHeight: 50,
@@ -665,8 +656,7 @@ const styles = StyleSheet.create({
   categoriesContent: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 8,
   },
   categoryButton: {
     paddingHorizontal: 16,
