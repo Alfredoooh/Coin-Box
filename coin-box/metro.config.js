@@ -1,4 +1,4 @@
-<p>const { getDefaultConfig } = require('expo/metro-config');
+const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
@@ -28,4 +28,4 @@ config.resolver = {
   ],
 };
 
-module.exports = config;</p>
+module.exports = config;
