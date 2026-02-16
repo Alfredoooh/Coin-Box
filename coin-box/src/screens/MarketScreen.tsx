@@ -156,7 +156,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
 
   const connectWebSocket = () => {
     if (isConnectingRef.current) return;
-    
+
     isConnectingRef.current = true;
     setError(false);
 
@@ -196,7 +196,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
       ws.onclose = () => {
         console.log('WebSocket fechado');
         isConnectingRef.current = false;
-        
+
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log('Tentando reconectar...');
           connectWebSocket();
@@ -274,7 +274,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     if (symbol.includes('ETH')) return 'ETH';
     if (symbol.includes('LTC')) return 'LTC';
     if (symbol.includes('XRP')) return 'XRP';
-    
+
     return symbol.substring(0, 3);
   };
 
@@ -302,7 +302,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     symbols.forEach(symbol => {
       if (!symbol.is_trading_suspended && symbol.exchange_is_open) {
         const category = getMarketCategory(symbol.symbol, symbol.market, symbol.submarket);
-        
+
         if (category) {
           const marketData: MarketData = {
             symbol: symbol.symbol,
@@ -325,7 +325,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     setAllMarkets(markets);
     setLoading(false);
     setError(false);
-    
+
     if (tickSymbols.length > 0) {
       subscribeToTicks(tickSymbols.slice(0, 100));
     }
@@ -364,7 +364,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
     if (symbol.includes('ETH')) return 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
     if (symbol.includes('LTC')) return 'https://cryptologos.cc/logos/litecoin-ltc-logo.png';
     if (symbol.includes('XRP')) return 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
-    
+
     return 'candlestick';
   };
 
@@ -375,7 +375,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
   const renderMarketItem = (item: MarketData, index: number, arrayLength: number) => {
     const isPositive = item.change > 0;
     const isNegative = item.change < 0;
-    
+
     const changeColor = isPositive ? colors.positive : isNegative ? colors.negative : colors.neutral;
     const hasPrice = item.price > 0;
 
@@ -399,7 +399,7 @@ export default function MarketScreen({ isDarkMode, navigation }: MarketScreenPro
           <View style={[styles.logoContainer, { backgroundColor: colors.surface }]}>
             {item.logo === 'candlestick' ? (
               <Image
-                source={require('../assets/candlestick.png')}
+                source={require('../../assets/candlestick.png')}
                 style={styles.candlestickIcon}
                 resizeMode="contain"
               />
