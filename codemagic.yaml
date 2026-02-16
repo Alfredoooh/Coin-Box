@@ -1,0 +1,37 @@
+workflows:
+  react-native-android:
+    name: Coin Box - Android Build
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      android_signing:
+        - keystore_reference
+      vars:
+        PACKAGE_NAME: "com.nexa.cbox"
+        NODE_VERSION: "20"
+    scripts:
+      - name: Set Android SDK location
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/coin-box/android/local.properties"
+      - name: Install npm dependencies
+        script: |
+          cd coin-box
+          npm install
+      - name: Run Expo Prebuild
+        script: |
+          cd coin-box
+          npx expo prebuild --clean --platform android
+      - name: Build Android APK
+        script: |
+          cd coin-box/android
+          ./gradlew assembleRelease
+    artifacts:
+      - coin-box/android/app/build/outputs/**/*.apk
+      - coin-box/android/app/build/outputs/**/*.aab
+    publishing:
+      email:
+        recipients:
+          - seu-email@exemplo.com
+        notify:
+          success: true
+          failure: true
