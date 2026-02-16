@@ -25,51 +25,67 @@ workflows:
 
       - name: Write build.gradle
         script: |
-          cat > $CM_BUILD_DIR/coin-box/android/app/build.gradle \<< 'EOF'
-          apply plugin: "com.android.application"
-          apply plugin: "org.jetbrains.kotlin.android"
-          apply plugin: "com.facebook.react"
-          def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
-          react {
-            autolinkLibrariesWithApp()
-            enableBundleCompression = true
-            bundleCommand = "export:embed"
-          }
-          android {
-            ndkVersion rootProject.ext.ndkVersion
-            buildToolsVersion rootProject.ext.buildToolsVersion
-            compileSdk rootProject.ext.compileSdkVersion
-            namespace "com.nexa.cbox"
-            defaultConfig {
-              applicationId "com.nexa.cbox"
-              minSdk 24
-              targetSdk rootProject.ext.targetSdkVersion
-              versionCode 1
-              versionName "1.0"
-              ndk { abiFilters "arm64-v8a" }
-            }
-            signingConfigs {
-              debug {
-                storeFile file('debug.keystore')
-                storePassword 'android'
-                keyAlias 'androiddebugkey'
-                keyPassword 'android'
-              }
-            }
-            buildTypes {
-              release {
-                signingConfig signingConfigs.debug
-                minifyEnabled true
-                shrinkResources true
-                proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-              }
-            }
-          }
-          dependencies {
-            implementation("com.facebook.react:react-android")
-            implementation("com.facebook.react:hermes-android")
-          }
-          EOF
+          BUILD_GRADLE="$CM_BUILD_DIR/coin-box/android/app/build.gradle"
+          cat > "$BUILD_GRADLE" << 'ENDOFFILE'
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+react {
+    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    enableBundleCompression = true
+    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+    bundleCommand = "export:embed"
+    autolinkLibrariesWithApp()
+}
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.nexa.cbox"
+    defaultConfig {
+        applicationId "com.nexa.cbox"
+        minSdk 24
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging false
+        }
+        exclude 'META-INF/**'
+        exclude '**/*.kotlin_module'
+        pickFirst 'lib/*/libc++_shared.so'
+    }
+}
+dependencies {
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+}
+ENDOFFILE
 
       - name: Build Android APK
         script: |
