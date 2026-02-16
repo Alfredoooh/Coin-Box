@@ -1,72 +1,55 @@
 workflows:
-  android-build:
-    name: Android Build
+  expo-android-webview:
+    name: Expo Android WebView
     max_build_duration: 60
-    instance_type: mac_mini_m2
     environment:
       vars:
         WORKING_DIRECTORY: "coin-box"
-      node: 20.11.0
-      java: 17
+      node: latest
     cache:
       cache_paths:
         - $HOME/.gradle/caches
         - $WORKING_DIRECTORY/node_modules
     scripts:
-      - name: Install
+      - name: Install dependencies
         script: |
           cd "$WORKING_DIRECTORY"
           npm install
-          npm install --save-dev babel-preset-expo
 
-      - name: Fix Gradle Wrapper
-        script: |
-          cd "$WORKING_DIRECTORY/android/gradle/wrapper"
-          sed -i '' 's/gradle-8.14.3/gradle-8.10.2/g' gradle-wrapper.properties
-
-      - name: Prebuild
+      - name: Expo prebuild
         script: |
           cd "$WORKING_DIRECTORY"
-          rm -rf android
+          rm -rf android ios
           npx expo prebuild --platform android --clean
 
-      - name: Build
+      - name: Build APK
         script: |
-          cd "$WORKING_DIRECTORY"
-          
-          mkdir -p "$CM_BUILD_DIR"
-          cp codemagic.yaml "$CM_BUILD_DIR/codemagic.yaml.txt" 2>/dev/null || true
-          
-          cd android
-          ./gradlew assembleRelease --no-daemon 2>&1 | tee /tmp/build.log
-          
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "BUILD FAILED"
-            
-            grep -B5 -A5 "FAILURE\|Error:" /tmp/build.log | head -40 > "$CM_BUILD_DIR/error.txt"
-            cp "$WORKING_DIRECTORY/babel.config.js" "$CM_BUILD_DIR/babel.txt" 2>/dev/null || true
-            cp "$WORKING_DIRECTORY/android/app/build.gradle" "$CM_BUILD_DIR/build-gradle.txt" 2>/dev/null || true
-            cp "$WORKING_DIRECTORY/package.json" "$CM_BUILD_DIR/package.txt" 2>/dev/null || true
-            
-            exit 1
-          fi
+          cd "$WORKING_DIRECTORY/android"
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Copy APK
         script: |
           cd "$WORKING_DIRECTORY"
-          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
           
-          if [ -n "$APK" ]; then
-            cp "$APK" "$CM_BUILD_DIR/coin-box.apk"
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ Erro: Nenhum APK encontrado!"
+            exit 1
           fi
+          
+          mkdir -p "$CM_BUILD_DIR"
+          cp "$APK_PATH" "$CM_BUILD_DIR/app-release.apk"
+          
+          echo "✅ APK copiado:"
+          du -h "$CM_BUILD_DIR/app-release.apk"
 
     artifacts:
-      - $CM_BUILD_DIR/*
-
+      - $CM_BUILD_DIR/*.apk
     publishing:
       email:
         recipients:
-          - alfredoooh.x3@gmail.com
+          - seu-email@example.com
         notify:
           success: true
           failure: true
