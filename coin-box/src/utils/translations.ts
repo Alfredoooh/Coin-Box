@@ -1,5 +1,5 @@
 // utils/translations.ts
-const translations = {
+const translations: Record<string, Record<string, string>> = {
   pt: {
     profile: 'Perfil',
     settings: 'Configurações',
@@ -8,10 +8,14 @@ const translations = {
     theme: 'Tema',
     darkMode: 'Modo Escuro',
     lightMode: 'Modo Claro',
+    autoMode: 'Automático',
     languageLabel: 'Idioma',
     portuguese: 'Português',
     english: 'Inglês',
     inicio: 'Início',
+    mercado: 'Mercado',
+    portfolio: 'Portfólio',
+    automacao: 'Automação',
     canais: 'Canais',
     plataforma: 'Plataforma',
     tv: 'TV',
@@ -26,10 +30,14 @@ const translations = {
     theme: 'Theme',
     darkMode: 'Dark Mode',
     lightMode: 'Light Mode',
+    autoMode: 'Automatic',
     languageLabel: 'Language',
     portuguese: 'Portuguese',
     english: 'English',
     inicio: 'Home',
+    mercado: 'Market',
+    portfolio: 'Portfolio',
+    automacao: 'Automation',
     canais: 'Channels',
     plataforma: 'Platform',
     tv: 'TV',
@@ -38,6 +46,6 @@ const translations = {
   },
 };
 
-export const getTranslation = (language, key) => {
-  return translations[language][key] || key;
+export const getTranslation = (language: string, key: string): string => {
+  return translations[language]?.[key] ?? key;
 };

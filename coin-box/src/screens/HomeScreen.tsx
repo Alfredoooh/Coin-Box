@@ -206,13 +206,9 @@ export default function HomeScreen({ navigation, isDarkMode, language }) {
   const [currency, setCurrency] = useState('USD');
 
   // controla se o ScrollView pai está habilitado (desligamos durante o drag do carousel)
-  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   // Controle de scroll para animação do header
   const scrollY = useRef(new Animated.Value(0)).current;
-  const fabScale = useRef(new Animated.Value(0)).current;
-  const fabOpacity = useRef(new Animated.Value(0)).current;
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -233,10 +229,6 @@ export default function HomeScreen({ navigation, isDarkMode, language }) {
   const assistantModalOpacity = useRef(new Animated.Value(0)).current;
   const newsModalSlide = useRef(new Animated.Value(1)).current;
   const newsModalOpacity = useRef(new Animated.Value(0)).current;
-  const portfolioPanResponder = useRef(null);
-  const createMenuPanResponder = useRef(null);
-  const assistantPanResponder = useRef(null);
-  const newsPanResponder = useRef(null);
   const logoutBorderRadius = useRef(new Animated.Value(100)).current;
   const mainContentScale = useRef(new Animated.Value(1)).current;
   const mainContentTranslateY = useRef(new Animated.Value(0)).current;

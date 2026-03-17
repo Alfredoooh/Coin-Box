@@ -10,7 +10,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import MarketScreen from './src/screens/MarketScreen';
 import MarketDetailScreen from './src/screens/MarketDetailScreen';
-import MarketInfoScreen from './src/screens/MarketInfoScreen';
+import MarketScreen2 from './src/screens/MarketScreen'; // reutilizado em MarketInfo
 import { COLORS } from './src/styles/theme';
 import { screenOptions } from './src/navigation/navigationConfig';
 import { BalanceProvider } from './src/contexts/BalanceContext';
@@ -25,20 +25,7 @@ export default function App() {
 
   const colors = isDarkMode ? COLORS.dark : COLORS.light;
 
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      const setNavigationBarColor = async () => {
-        try {
-          const { setBackgroundColorAsync, setButtonStyleAsync } = require('expo-navigation-bar');
-          await setBackgroundColorAsync(isDarkMode ? '#0E0F10' : '#FFFFFF');
-          await setButtonStyleAsync(isDarkMode ? 'light' : 'dark');
-        } catch (e) {
-          console.log('Navigation bar API not available');
-        }
-      };
-      setNavigationBarColor();
-    }
-  }, [isDarkMode]);
+  // expo-navigation-bar not installed — skip navigation bar color
 
   return (
     <SafeAreaProvider>
@@ -91,7 +78,7 @@ export default function App() {
 
               <Stack.Screen 
                 name="MarketInfo"
-                component={MarketInfoScreen}
+                component={MarketScreen2}
               />
             </Stack.Navigator>
           </NavigationContainer>
